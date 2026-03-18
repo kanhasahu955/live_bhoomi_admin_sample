@@ -1,0 +1,194 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+/* ─── Base ─────────────────────────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body,
+#__nuxt {
+  min-height: 100vh;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Layout: Sidebar & Header ─────────────────────────────────────────── */
+.layout-nav-link {
+  @apply text-gray-600 transition-colors duration-200 hover:bg-gray-100 hover:text-gray-900;
+  @apply dark:text-gray-400 dark:hover:bg-gray-800/80 dark:hover:text-gray-100;
+}
+
+.layout-nav-link-active {
+  @apply bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400;
+  @apply hover:bg-emerald-100 hover:text-emerald-800 dark:hover:bg-emerald-900/50 dark:hover:text-emerald-300;
+}
+
+.layout-header-btn {
+  @apply text-gray-500 transition-colors duration-200 hover:bg-gray-100 hover:text-gray-900;
+  @apply dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white;
+}
+
+/* ─── Transitions ───────────────────────────────────────────────────────── */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* ─── Profile page animations ───────────────────────────────────────────── */
+@keyframes profile-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes profile-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes profile-avatar-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgb(16 185 129 / 0.3);
+  }
+  50% {
+    box-shadow: 0 0 24px 4px rgb(16 185 129 / 0.2);
+  }
+}
+
+@keyframes profile-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes profile-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes profile-notification-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.profile-animate-fade-up {
+  animation: profile-fade-up 0.4s ease-out forwards;
+}
+
+.profile-animate-scale-in {
+  animation: profile-scale-in 0.35s ease-out forwards;
+}
+
+.profile-animate-slide-right {
+  animation: profile-slide-in-right 0.4s ease-out forwards;
+}
+
+.profile-card-hover {
+  @apply transition-all duration-300 ease-out;
+}
+.profile-card-hover:hover {
+  @apply shadow-lg shadow-gray-200/50 dark:shadow-gray-900/30;
+  transform: translateY(-2px);
+}
+
+/* ─── Profile page buttons (small, responsive) ──────────────────────────── */
+.profile-btn-primary {
+  @apply !inline-flex min-h-8 w-full cursor-pointer items-center justify-center gap-1.5 !rounded-md px-3 py-1.5 text-xs font-semibold tracking-tight !text-white !shadow-md transition-all duration-300 ease-out sm:min-h-8 sm:w-auto sm:min-w-[90px] sm:px-3 sm:py-1.5 sm:text-xs;
+  background: linear-gradient(135deg, rgb(16 185 129) 0%, rgb(5 150 105) 100%) !important;
+  box-shadow: 0 4px 6px -1px rgb(16 185 129 / 0.2) !important;
+}
+.profile-btn-primary:hover {
+  background: linear-gradient(135deg, rgb(5 150 105) 0%, rgb(4 120 87) 100%) !important;
+  box-shadow: 0 6px 12px -2px rgb(16 185 129 / 0.3) !important;
+  transform: translateY(-1px);
+}
+.profile-btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px -1px rgb(16 185 129 / 0.15) !important;
+}
+
+.profile-btn-secondary {
+  @apply !inline-flex min-h-8 w-full cursor-pointer items-center justify-center gap-1.5 !rounded-md !border px-3 py-1.5 text-xs font-semibold tracking-tight transition-all duration-300 ease-out sm:min-h-8 sm:w-auto sm:min-w-[100px] sm:px-3 sm:py-1.5 sm:text-xs;
+  border-color: rgb(16 185 129 / 0.6) !important;
+  color: rgb(4 120 87) !important;
+  background: transparent !important;
+}
+.dark .profile-btn-secondary {
+  border-color: rgb(16 185 129 / 0.5) !important;
+  color: rgb(52 211 153) !important;
+}
+.profile-btn-secondary:hover {
+  border-color: rgb(16 185 129) !important;
+  background: rgb(236 253 245 / 0.8) !important;
+  box-shadow: 0 0 0 2px rgb(16 185 129 / 0.1);
+  transform: translateY(-1px);
+}
+.dark .profile-btn-secondary:hover {
+  background: rgb(2 44 34 / 0.5) !important;
+}
+.profile-btn-secondary:active {
+  transform: translateY(0);
+}
+
+.profile-btn-danger {
+  @apply !inline-flex min-h-8 w-full cursor-pointer items-center justify-center gap-1.5 !rounded-md !border px-3 py-1.5 text-xs font-semibold tracking-tight transition-all duration-300 ease-out sm:min-h-8 sm:w-auto sm:min-w-[110px] sm:px-3 sm:py-1.5 sm:text-xs;
+  border-color: rgb(239 68 68 / 0.6) !important;
+  color: rgb(185 28 28) !important;
+  background: transparent !important;
+}
+.dark .profile-btn-danger {
+  border-color: rgb(239 68 68 / 0.5) !important;
+  color: rgb(248 113 113) !important;
+}
+.profile-btn-danger:hover {
+  border-color: rgb(239 68 68) !important;
+  background: rgb(254 226 226 / 0.8) !important;
+  box-shadow: 0 0 0 2px rgb(239 68 68 / 0.1);
+  transform: translateY(-1px);
+}
+.dark .profile-btn-danger:hover {
+  background: rgb(127 29 29 / 0.5) !important;
+}
+.profile-btn-danger:active {
+  transform: translateY(0);
+}
+
+.profile-input-focus {
+  @apply transition-all duration-200;
+}
+.profile-input-focus:focus-within {
+  @apply ring-2 ring-emerald-500/20 ring-offset-2 ring-offset-white dark:ring-offset-gray-900;
+}
