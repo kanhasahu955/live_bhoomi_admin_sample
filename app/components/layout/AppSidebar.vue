@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { NavItem } from '~/config/layout'
 import { useLayoutStore } from '~/stores/layout'
+import { useRoute } from 'nuxt/app'
 
 interface Props {
   navItems: NavItem[]
@@ -15,7 +16,23 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{ logout: [] }>()
 const layoutStore = useLayoutStore()
+const route = useRoute()
 const collapsed = computed(() => !layoutStore.isSidebarOpen)
+
+function isNavActive(item: NavItem): boolean {
+  const config = useRuntimeConfig()
+  const base = (config.app?.baseURL as string) || '/'
+  const baseClean = base.replace(/^\/+|\/+$/g, '') // e.g. 'admin'
+  let path = (route.path || '/').replace(/^\/+|\/+$/g, '')
+  if (baseClean && path.startsWith(baseClean)) {
+    path = path.slice(baseClean.length).replace(/^\/+/, '') || 'root'
+  } else {
+    path = path || 'root'
+  }
+  const target = (item.to === '/' || item.to === '') ? 'root' : item.to.replace(/^\/+|\/+$/g, '')
+  if (target === 'root') return path === 'root' || path === ''
+  return path === target || path.startsWith(target + '/')
+}
 </script>
 
 <template>
@@ -56,11 +73,16 @@ const collapsed = computed(() => !layoutStore.isSidebarOpen)
         <li v-for="item in props.navItems" :key="item.to">
           <NuxtLink
             :to="item.to"
-            class="layout-nav-link group flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13.5px] font-medium transition-all duration-200"
-            active-class="layout-nav-link-active"
+            :class="[
+              'layout-nav-link group flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13.5px] font-medium transition-all duration-200',
+              isNavActive(item) && 'layout-nav-link-active'
+            ]"
           >
             <span
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors group-hover:text-gray-700 dark:text-gray-400 dark:group-hover:text-gray-200"
+              :class="[
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors',
+                isNavActive(item) ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 group-hover:text-gray-700 dark:text-gray-400 dark:group-hover:text-gray-200'
+              ]"
             >
               <UIcon :name="item.icon" class="h-[18px] w-[18px]" />
             </span>

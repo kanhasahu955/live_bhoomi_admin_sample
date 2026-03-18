@@ -22,8 +22,9 @@ body,
 }
 
 .layout-nav-link-active {
-  @apply bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400;
+  @apply bg-emerald-50/90 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400;
   @apply hover:bg-emerald-100 hover:text-emerald-800 dark:hover:bg-emerald-900/50 dark:hover:text-emerald-300;
+  @apply border-l-2 border-emerald-500 dark:border-emerald-400;
 }
 
 .layout-header-btn {
@@ -191,4 +192,75 @@ body,
 }
 .profile-input-focus:focus-within {
   @apply ring-2 ring-emerald-500/20 ring-offset-2 ring-offset-white dark:ring-offset-gray-900;
+}
+
+/* ─── Dashboard animations ─────────────────────────────────────────────── */
+@keyframes dashboard-gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes dashboard-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes dashboard-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes dashboard-glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px -4px rgb(16 185 129 / 0.3); }
+  50% { box-shadow: 0 0 32px -4px rgb(16 185 129 / 0.5); }
+}
+
+@keyframes dashboard-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dashboard-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.dashboard-hero {
+  background: linear-gradient(135deg, #059669 0%, #0d9488 25%, #0891b2 50%, #0d9488 75%, #059669 100%);
+  background-size: 200% 200%;
+  animation: dashboard-gradient-shift 8s ease infinite;
+}
+
+.dashboard-card-hover {
+  @apply transition-all duration-300 ease-out;
+}
+.dashboard-card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+.dark .dashboard-card-hover:hover {
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.2);
+}
+
+.dashboard-stat-card {
+  animation: dashboard-fade-in-up 0.5s ease-out forwards;
+}
+
+.dashboard-quick-link {
+  @apply transition-all duration-300 ease-out;
+}
+.dashboard-quick-link:hover {
+  transform: translateY(-2px) scale(1.02);
 }

@@ -47,7 +47,7 @@ function handleLogout() {
         @open-search="layout.openSearch"
         @logout="handleLogout"
       />
-      <div class="layout-content flex-1 w-full min-w-0 overflow-x-hidden pt-14 px-4 pb-6 sm:px-6 sm:pb-8 lg:px-8 lg:pb-10">
+      <div class="layout-content flex-1 w-full min-w-0 overflow-x-hidden pt-[4.5rem] px-4 pb-6 sm:px-6 sm:pb-8 lg:px-8 lg:pb-10">
         <div class="w-full min-w-0 overflow-x-hidden">
           <slot />
         </div>

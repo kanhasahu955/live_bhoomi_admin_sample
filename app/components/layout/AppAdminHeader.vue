@@ -57,11 +57,11 @@ onUnmounted(() => {
 <template>
   <header
     :class="[
-      'layout-header fixed left-0 right-0 top-0 z-40 flex min-h-14 shrink-0 flex-col justify-center border-b border-gray-200/80 dark:border-gray-800/80 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl transition-[left] duration-300 ease-out',
+      'layout-header fixed left-0 right-0 top-0 z-40 flex h-14 shrink-0 items-center border-b border-gray-200/80 dark:border-gray-800/80 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl transition-[left] duration-300 ease-out',
       layoutStore.isSidebarOpen ? 'lg:left-64' : 'lg:left-20'
     ]"
   >
-    <div class="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
+    <div class="flex w-full items-center justify-between gap-4 px-4 sm:px-6">
       <div class="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
         <button
           v-if="props.showMenuButton"

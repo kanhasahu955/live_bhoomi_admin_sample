@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { NavItem } from '~/config/layout'
 import { useLayoutStore } from '~/stores/layout'
+import { useRoute } from 'nuxt/app'
 
 interface Props {
   navItems: NavItem[]
@@ -15,7 +16,23 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{ logout: [] }>()
 const layoutStore = useLayoutStore()
+const route = useRoute()
 const open = computed(() => layoutStore.isMobileMenuOpen)
+
+function isNavActive(item: NavItem): boolean {
+  const config = useRuntimeConfig()
+  const base = (config.app?.baseURL as string) || '/'
+  const baseClean = base.replace(/^\/+|\/+$/g, '')
+  let path = (route.path || '/').replace(/^\/+|\/+$/g, '')
+  if (baseClean && path.startsWith(baseClean)) {
+    path = path.slice(baseClean.length).replace(/^\/+/, '') || 'root'
+  } else {
+    path = path || 'root'
+  }
+  const target = (item.to === '/' || item.to === '') ? 'root' : item.to.replace(/^\/+|\/+$/g, '')
+  if (target === 'root') return path === 'root' || path === ''
+  return path === target || path.startsWith(target + '/')
+}
 
 function close() {
   layoutStore.closeMobileMenu()
@@ -62,8 +79,10 @@ function close() {
             <li v-for="item in props.navItems" :key="item.to">
               <NuxtLink
                 :to="item.to"
-                class="layout-nav-link flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13.5px] font-medium"
-                active-class="layout-nav-link-active"
+                :class="[
+                  'layout-nav-link flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13.5px] font-medium',
+                  isNavActive(item) && 'layout-nav-link-active'
+                ]"
                 @click="close"
               >
                 <UIcon :name="item.icon" class="h-[18px] w-[18px] shrink-0" />

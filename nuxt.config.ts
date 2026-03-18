@@ -35,7 +35,8 @@ export default defineNuxtConfig({
   modules: [
     '@nuxt/ui',
     '@pinia/nuxt',
-    '@vueuse/nuxt'
+    '@vueuse/nuxt',
+    '@vueuse/motion/nuxt'
   ],
 
   pinia: {

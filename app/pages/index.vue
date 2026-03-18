@@ -33,6 +33,17 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const chartsReady = ref(false)
 
+const greeting = computed(() => {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  return 'Good evening'
+})
+
+const todayFormatted = computed(() => {
+  return new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
+})
+
 const hasData = computed(() => usersCount.value != null || projectsCount.value != null || listingsCount.value != null)
 
 const SAMPLE_BAR_CATEGORY = [
@@ -316,33 +327,43 @@ onMounted(async () => {
 <template>
   <div class="min-h-full min-w-0 w-full max-w-[1600px] mx-auto">
     <!-- Dashboard Hero Banner -->
-    <div class="relative mb-8 overflow-hidden rounded-2xl border border-gray-200/80 bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 p-6 shadow-xl dark:border-gray-700/80 sm:p-8">
-      <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.08\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-50" />
+    <div
+      v-motion
+      :initial="{ opacity: 0, y: 20 }"
+      :enter="{ opacity: 1, y: 0, transition: { duration: 500, ease: 'easeOut' } }"
+      class="dashboard-hero relative mb-8 overflow-hidden rounded-2xl border border-white/20 p-6 shadow-2xl shadow-emerald-900/20 sm:p-8"
+    >
+      <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.08\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-60" />
+      <div class="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
+      <div class="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-cyan-400/20 blur-2xl" />
       <div class="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+          <p class="text-sm font-medium text-white/80">{{ greeting }}, welcome back</p>
+          <h1 class="mt-0.5 text-2xl font-bold tracking-tight text-white drop-shadow-sm sm:text-3xl">
             Dashboard
           </h1>
-          <p class="mt-1 text-emerald-100 sm:text-base">
-            Platform overview from your API — users, projects, and listings
+          <p class="mt-1.5 flex items-center gap-2 text-emerald-100/95 text-sm sm:text-base">
+            <UIcon name="i-lucide-calendar" class="size-4 shrink-0" />
+            {{ todayFormatted }}
           </p>
         </div>
-        <div class="flex flex-wrap gap-3">
-          <NuxtLink
-            to="/analytics"
-            class="inline-flex items-center gap-2 rounded-xl bg-white/20 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
-          >
-            <UIcon name="i-lucide-bar-chart-3" class="size-5" />
-            View Analytics
-          </NuxtLink>
-        </div>
+        <NuxtLink
+          to="/analytics"
+          class="inline-flex items-center gap-2 rounded-xl bg-white/25 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-md transition-all duration-300 hover:bg-white/35 hover:scale-105 hover:shadow-lg"
+        >
+          <UIcon name="i-lucide-bar-chart-3" class="size-5" />
+          View Analytics
+        </NuxtLink>
       </div>
     </div>
 
     <!-- Error -->
     <div
       v-if="error"
-      class="mb-6 flex items-center gap-2 rounded-xl border border-amber-200/80 bg-amber-50/95 px-4 py-3 text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-900/25 dark:text-amber-300"
+      v-motion
+      :initial="{ opacity: 0, y: -10 }"
+      :enter="{ opacity: 1, y: 0, transition: { duration: 300 } }"
+      class="mb-6 flex items-center gap-2 rounded-xl border border-amber-200/80 bg-amber-50/95 px-4 py-3 text-sm text-amber-800 shadow-sm dark:border-amber-800/60 dark:bg-amber-900/25 dark:text-amber-300"
     >
       <UIcon name="i-lucide-alert-circle" class="h-5 w-5 shrink-0" />
       {{ error }}
@@ -351,39 +372,50 @@ onMounted(async () => {
     <!-- KPI Stat Cards -->
     <div class="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-6 sm:grid-rows-1">
       <NuxtLink
-        v-for="stat in statCards"
+        v-for="(stat, i) in statCards"
         :key="stat.label"
         :to="stat.link"
-        class="group flex min-h-[140px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-lg shadow-gray-200/30 transition-all hover:-translate-y-0.5 hover:shadow-xl dark:border-gray-700/80 dark:bg-gray-900 dark:shadow-gray-900/50"
+        v-motion
+        :initial="{ opacity: 0, y: 24 }"
+        :enter="{ opacity: 1, y: 0, transition: { delay: 80 * i, duration: 400, ease: 'easeOut' } }"
+        :class="[
+          'dashboard-card-hover group flex min-h-[150px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-lg shadow-gray-200/20 dark:border-gray-700/80 dark:bg-gray-900 dark:shadow-gray-900/40',
+          'hover:border-gray-300/80 dark:hover:border-gray-600/80'
+        ]"
       >
         <div class="flex flex-1 items-center gap-5 p-6">
           <div
-            :class="[stat.iconClass, 'flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl transition-transform group-hover:scale-105']"
+            :class="[stat.iconClass, 'flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg']"
           >
-            <UIcon :name="stat.icon" class="size-8" />
+            <UIcon :name="stat.icon" class="size-7" />
           </div>
           <div class="min-w-0 flex-1">
-            <p class="text-sm font-semibold text-gray-600 dark:text-gray-400">
+            <p class="text-sm font-semibold text-gray-500 dark:text-gray-400">
               {{ stat.label }}
             </p>
             <p class="mt-1 text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl">
               {{ stat.value }}
             </p>
           </div>
-          <UIcon name="i-lucide-arrow-right" class="size-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-1" />
+          <UIcon name="i-lucide-arrow-right" class="size-5 shrink-0 text-gray-400 transition-all duration-300 group-hover:translate-x-1 group-hover:text-gray-600" />
         </div>
-        <div :class="['h-1 w-full bg-gradient-to-r', stat.gradient]" />
+        <div :class="['h-1 w-full bg-gradient-to-r transition-all duration-300 group-hover:opacity-90', stat.gradient]" />
       </NuxtLink>
     </div>
 
     <!-- Users Section -->
-    <div class="mb-8">
+    <div
+      v-motion
+      :initial="{ opacity: 0, y: 16 }"
+      :enter="{ opacity: 1, y: 0, transition: { delay: 200, duration: 400, ease: 'easeOut' } }"
+      class="mb-8"
+    >
       <h2 class="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
         <UIcon name="i-lucide-users" class="size-5 text-cyan-500" />
         Users
       </h2>
       <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        <div class="flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
+        <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
           <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-cyan-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-cyan-950/20 dark:to-transparent">
             <h3 class="font-semibold text-gray-900 dark:text-white">By Role</h3>
             <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">User roles from API</p>
@@ -393,7 +425,7 @@ onMounted(async () => {
           </div>
           <div v-else class="flex h-[260px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">Loading chart…</div>
         </div>
-        <div class="flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
+        <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
           <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-blue-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-blue-950/20 dark:to-transparent">
             <h3 class="font-semibold text-gray-900 dark:text-white">By Status</h3>
             <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">User status from API</p>
@@ -407,13 +439,18 @@ onMounted(async () => {
     </div>
 
     <!-- Projects Section -->
-    <div class="mb-8">
+    <div
+      v-motion
+      :initial="{ opacity: 0, y: 16 }"
+      :enter="{ opacity: 1, y: 0, transition: { delay: 280, duration: 400, ease: 'easeOut' } }"
+      class="mb-8"
+    >
       <h2 class="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
         <UIcon name="i-lucide-folder-kanban" class="size-5 text-emerald-500" />
         Projects
       </h2>
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div class="flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900 lg:col-span-2">
+        <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900 lg:col-span-2">
           <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-emerald-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-emerald-950/20 dark:to-transparent">
             <h3 class="font-semibold text-gray-900 dark:text-white">By Category</h3>
             <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">From projects API</p>
@@ -423,7 +460,7 @@ onMounted(async () => {
           </div>
           <div v-else class="flex h-[260px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">Loading chart…</div>
         </div>
-        <div class="flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
+        <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
           <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-teal-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-teal-950/20 dark:to-transparent">
             <h3 class="font-semibold text-gray-900 dark:text-white">By Status</h3>
             <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Approval status</p>
@@ -437,13 +474,18 @@ onMounted(async () => {
     </div>
 
     <!-- Listings Section -->
-    <div class="mb-8">
+    <div
+      v-motion
+      :initial="{ opacity: 0, y: 16 }"
+      :enter="{ opacity: 1, y: 0, transition: { delay: 360, duration: 400, ease: 'easeOut' } }"
+      class="mb-8"
+    >
       <h2 class="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
         <UIcon name="i-lucide-home" class="size-5 text-teal-500" />
         Listings
       </h2>
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div class="flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
+        <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
           <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-teal-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-teal-950/20 dark:to-transparent">
             <h3 class="font-semibold text-gray-900 dark:text-white">By Purpose</h3>
             <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Sale / Rent</p>
@@ -453,7 +495,7 @@ onMounted(async () => {
           </div>
           <div v-else class="flex h-[260px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">Loading chart…</div>
         </div>
-        <div class="flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
+        <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
           <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-cyan-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-cyan-950/20 dark:to-transparent">
             <h3 class="font-semibold text-gray-900 dark:text-white">By Status</h3>
             <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Approval status</p>
@@ -463,7 +505,7 @@ onMounted(async () => {
           </div>
           <div v-else class="flex h-[260px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">Loading chart…</div>
         </div>
-        <div class="flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
+        <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
           <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-violet-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-violet-950/20 dark:to-transparent">
             <h3 class="font-semibold text-gray-900 dark:text-white">By Category</h3>
             <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Property types</p>
@@ -477,12 +519,17 @@ onMounted(async () => {
     </div>
 
     <!-- Activity Trend -->
-    <div class="mb-8">
+    <div
+      v-motion
+      :initial="{ opacity: 0, y: 16 }"
+      :enter="{ opacity: 1, y: 0, transition: { delay: 440, duration: 400, ease: 'easeOut' } }"
+      class="mb-8"
+    >
       <h2 class="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
         <UIcon name="i-lucide-trending-up" class="size-5 text-emerald-500" />
         Activity Trend
       </h2>
-      <div class="flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
+      <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
         <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-gray-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-gray-800/50 dark:to-transparent">
           <h3 class="font-semibold text-gray-900 dark:text-white">New projects & listings by month</h3>
           <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Combined activity over time</p>
@@ -495,8 +542,13 @@ onMounted(async () => {
     </div>
 
     <!-- Quick Links + Recent -->
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      <div class="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
+    <div
+      v-motion
+      :initial="{ opacity: 0, y: 16 }"
+      :enter="{ opacity: 1, y: 0, transition: { delay: 520, duration: 400, ease: 'easeOut' } }"
+      class="grid grid-cols-1 gap-6 lg:grid-cols-2"
+    >
+      <div class="dashboard-card-hover overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
         <div class="border-b border-gray-100 bg-gradient-to-r from-emerald-50/50 to-teal-50/50 px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-emerald-950/20 dark:to-teal-950/20">
           <h3 class="font-semibold text-gray-900 dark:text-white">
             Quick Links
@@ -505,36 +557,36 @@ onMounted(async () => {
         <div class="grid grid-cols-2 place-items-stretch gap-3 p-5 sm:grid-cols-4 sm:gap-4">
           <NuxtLink
             to="/projects"
-            class="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border border-gray-200/80 bg-gray-50/60 px-4 py-4 transition-all hover:border-emerald-300 hover:bg-emerald-50/80 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/30"
+            class="dashboard-quick-link flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-xl border border-gray-200/80 bg-gray-50/60 px-4 py-4 hover:border-emerald-300 hover:bg-emerald-50/80 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/30"
           >
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 shadow-sm transition-all duration-300 ease-out group-hover:shadow-md dark:bg-emerald-900/50 dark:text-emerald-400">
               <UIcon name="i-lucide-folder-kanban" class="size-5" />
             </div>
             <span class="text-center text-sm font-semibold text-gray-900 dark:text-white">Projects</span>
           </NuxtLink>
           <NuxtLink
             to="/listings"
-            class="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border border-gray-200/80 bg-gray-50/60 px-4 py-4 transition-all hover:border-teal-300 hover:bg-teal-50/80 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-teal-700 dark:hover:bg-teal-950/30"
+            class="dashboard-quick-link flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-xl border border-gray-200/80 bg-gray-50/60 px-4 py-4 hover:border-teal-300 hover:bg-teal-50/80 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-teal-700 dark:hover:bg-teal-950/30"
           >
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-600 dark:bg-teal-900/50 dark:text-teal-400">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-600 shadow-sm transition-all duration-300 ease-out dark:bg-teal-900/50 dark:text-teal-400">
               <UIcon name="i-lucide-home" class="size-5" />
             </div>
             <span class="text-center text-sm font-semibold text-gray-900 dark:text-white">Listings</span>
           </NuxtLink>
           <NuxtLink
             to="/users"
-            class="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border border-gray-200/80 bg-gray-50/60 px-4 py-4 transition-all hover:border-cyan-300 hover:bg-cyan-50/80 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-cyan-700 dark:hover:bg-cyan-950/30"
+            class="dashboard-quick-link flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-xl border border-gray-200/80 bg-gray-50/60 px-4 py-4 hover:border-cyan-300 hover:bg-cyan-50/80 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-cyan-700 dark:hover:bg-cyan-950/30"
           >
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-cyan-100 text-cyan-600 dark:bg-cyan-900/50 dark:text-cyan-400">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-cyan-100 text-cyan-600 shadow-sm transition-all duration-300 ease-out dark:bg-cyan-900/50 dark:text-cyan-400">
               <UIcon name="i-lucide-users" class="size-5" />
             </div>
             <span class="text-center text-sm font-semibold text-gray-900 dark:text-white">Users</span>
           </NuxtLink>
           <NuxtLink
             to="/analytics"
-            class="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border border-gray-200/80 bg-gray-50/60 px-4 py-4 transition-all hover:border-violet-300 hover:bg-violet-50/80 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-violet-700 dark:hover:bg-violet-950/30"
+            class="dashboard-quick-link flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-xl border border-gray-200/80 bg-gray-50/60 px-4 py-4 hover:border-violet-300 hover:bg-violet-50/80 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-violet-700 dark:hover:bg-violet-950/30"
           >
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/50 dark:text-violet-400">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600 shadow-sm transition-all duration-300 ease-out dark:bg-violet-900/50 dark:text-violet-400">
               <UIcon name="i-lucide-bar-chart-3" class="size-5" />
             </div>
             <span class="text-center text-sm font-semibold text-gray-900 dark:text-white">Analytics</span>
@@ -542,7 +594,7 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
+      <div class="dashboard-card-hover overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
         <div class="border-b border-gray-100 px-5 py-4 dark:border-gray-800">
           <h3 class="font-semibold text-gray-900 dark:text-white">
             Recent Activity
@@ -563,7 +615,7 @@ onMounted(async () => {
               v-for="u in recentUsers"
               :key="String(get(u, 'id'))"
               :to="`/users/${get(u, 'id')}`"
-              class="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2 transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/50"
+              class="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2.5 transition-all duration-200 hover:border-cyan-200 hover:bg-cyan-50/50 dark:border-gray-800 dark:hover:border-cyan-900/50 dark:hover:bg-cyan-950/20"
             >
               <UIcon name="i-lucide-users" class="size-4 text-cyan-500" />
               <span class="truncate text-sm font-medium text-gray-900 dark:text-white">{{ get(u, 'name') ?? get(u, 'email') ?? 'User' }}</span>
@@ -575,7 +627,7 @@ onMounted(async () => {
               v-for="p in recentProjects"
               :key="String(get(p, 'id'))"
               :to="`/projects/${get(p, 'id')}`"
-              class="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2 transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/50"
+              class="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2.5 transition-all duration-200 hover:border-emerald-200 hover:bg-emerald-50/50 dark:border-gray-800 dark:hover:border-emerald-900/50 dark:hover:bg-emerald-950/20"
             >
               <UIcon name="i-lucide-folder-kanban" class="size-4 text-emerald-500" />
               <span class="truncate text-sm font-medium text-gray-900 dark:text-white">{{ get(p, 'name') ?? 'Untitled' }}</span>
@@ -587,7 +639,7 @@ onMounted(async () => {
               v-for="l in recentListings"
               :key="String(get(l, 'id'))"
               :to="`/listings/${get(l, 'id')}`"
-              class="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2 transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/50"
+              class="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2.5 transition-all duration-200 hover:border-teal-200 hover:bg-teal-50/50 dark:border-gray-800 dark:hover:border-teal-900/50 dark:hover:bg-teal-950/20"
             >
               <UIcon name="i-lucide-home" class="size-4 text-teal-500" />
               <span class="truncate text-sm font-medium text-gray-900 dark:text-white">{{ get(l, 'title') ?? 'Untitled' }}</span>
