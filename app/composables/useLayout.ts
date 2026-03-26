@@ -7,6 +7,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'nuxt/app'
 import { getLayoutConfig, type NavItem } from '~/config/layout'
 import { useLayoutStore } from '~/stores/layout'
+import { stripAppBasePath } from '~/utils/nav-path'
 
 const SEARCH_HOTKEY = 'k'
 
@@ -33,19 +34,46 @@ export function useLayout(options: UseLayoutOptions = {}) {
   const isUserMenuOpen = ref(false)
   const isNotificationsOpen = ref(false)
 
-  const pageTitle = computed(() => (route.meta.title as string) || 'Admin Panel')
   const pageDescription = computed(() => route.meta.description as string | undefined)
 
+  const ROUTE_LABELS: Record<string, string> = {
+    partners: 'Partners',
+    profile: 'Profile',
+    listings: 'Listings',
+    projects: 'Projects',
+    analytics: 'Analytics',
+    users: 'Users',
+    settings: 'Settings',
+    login: 'Login'
+  }
+
+  const pageTitle = computed(() => {
+    const path = stripAppBasePath(route.path || '/')
+    const normalized = (path.replace(/\/$/, '') || '/') as string
+    if (normalized !== '/' && normalized !== '') {
+      const lastSeg = normalized.split('/').filter(Boolean).pop() || ''
+      const mapped = ROUTE_LABELS[lastSeg.toLowerCase()]
+      if (mapped) return mapped
+    }
+    return (route.meta.title as string) || 'Admin Panel'
+  })
+
   const breadcrumbs = computed<Breadcrumb[]>(() => {
-    const path = route.path?.replace(/\/$/, '') || '/'
-    if (path === '/') return [{ label: 'Dashboard', to: '/' }]
+    let path = stripAppBasePath(route.path?.replace(/\/$/, '') || '/')
+    path = path.replace(/\/$/, '') || '/'
+    if (path === '/' || path === '') return [{ label: 'Dashboard', to: '/' }]
     const segments = path.split('/').filter(Boolean)
     return segments.map((seg, i) => {
       const to = '/' + segments.slice(0, i + 1).join('/')
-      const label = route.meta.title && i === segments.length - 1
-        ? (route.meta.title as string)
-        : seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ')
-      return { label, to: i < segments.length - 1 ? to : undefined }
+      const isLast = i === segments.length - 1
+      const fromMap = ROUTE_LABELS[seg.toLowerCase()]
+      const label =
+        isLast && fromMap
+          ? fromMap
+          : isLast && route.meta?.title
+            ? String(route.meta.title)
+            : fromMap ?? seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ')
+      return { label, to: isLast ? undefined : to }
     })
   })
 

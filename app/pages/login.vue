@@ -1,38 +1,72 @@
 <script setup lang="ts">
+import { watch } from 'vue'
+import type { LoginResult } from '~/stores/auth'
+
 definePageMeta({
   layout: 'blank'
 })
+
+const ACCESS_DENIED_MSG =
+  'This account does not have permission to use the admin panel.'
 
 const email = ref('')
 const password = ref('')
 const loading = ref(false)
 const error = ref('')
 
+const route = useRoute()
 const auth = useAuth()
 const toast = useToast()
+
+function showAccessDeniedToast() {
+  try {
+    toast.add({
+      title: 'Access denied',
+      description: ACCESS_DENIED_MSG,
+      color: 'error',
+      icon: 'i-lucide-shield-off'
+    })
+  } catch {
+    // Toast may not be available
+  }
+}
+
+watch(
+  () => route.query.reason,
+  (reason) => {
+    if (reason !== 'access_denied' || !import.meta.client) return
+    showAccessDeniedToast()
+    navigateTo({ path: '/login', query: {} }, { replace: true })
+  },
+  { immediate: true }
+)
 
 const handleLogin = async () => {
   error.value = ''
   loading.value = true
   try {
-    let success = false
+    let result: LoginResult = false
     try {
-      success = await auth.login(email.value, password.value)
+      result = await auth.login(email.value, password.value)
     } catch {
       if (import.meta.dev) {
         auth.setToken('demo-token')
-        auth.setUser({ id: '1', email: email.value, name: 'Demo User' })
-        success = true
+        auth.setUser({ id: '1', email: email.value, name: 'Demo User', systemRole: 'ADMIN' })
+        result = 'success'
       } else {
         throw new Error('Login failed')
       }
     }
-    if (!success && import.meta.dev) {
+    if (!result && import.meta.dev) {
       auth.setToken('demo-token')
-      auth.setUser({ id: '1', email: email.value, name: 'Demo User' })
-      success = true
+      auth.setUser({ id: '1', email: email.value, name: 'Demo User', systemRole: 'ADMIN' })
+      result = 'success'
     }
-    if (success) {
+    if (result === 'access_denied') {
+      showAccessDeniedToast()
+      return
+    }
+    if (result === 'success') {
       try {
         toast.add({
           title: 'Login successful',

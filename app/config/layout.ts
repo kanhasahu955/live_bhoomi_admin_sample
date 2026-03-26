@@ -22,6 +22,7 @@ const DEFAULT_NAV_ITEMS: NavItem[] = [
   { label: 'Analytics', icon: 'i-lucide-bar-chart-3', to: '/analytics' },
   { label: 'Projects', icon: 'i-lucide-folder-kanban', to: '/projects' },
   { label: 'Listings', icon: 'i-lucide-home', to: '/listings' },
+  { label: 'Partners', icon: 'i-lucide-handshake', to: '/partners' },
   { label: 'Users', icon: 'i-lucide-users', to: '/users' },
   { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' },
 ]

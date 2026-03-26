@@ -62,7 +62,49 @@ export const MAP = { autocomplete: '/map/autocomplete', placeDetails: '/map/plac
 
 export interface LoginPayload { email: string; password: string }
 export interface RegisterPayload { email: string; password: string; name?: string }
-export interface AuthUser { id: string; email: string; name?: string; role?: string }
+export interface AuthUser {
+  id: string
+  email: string
+  name?: string
+  /** API often sends fullName without name */
+  fullName?: string
+  /** Business / account classification (e.g. PARTNER, AGENT) */
+  accountType?: string
+  /** API may send systemRole (preferred) or role */
+  systemRole?: string
+  role?: string
+}
+
+/** Map `/user/me` or login user payload into AuthUser */
+export function normalizeAuthUser(
+  data:
+    | (Partial<AuthUser> & {
+        id?: string | number
+        email?: string
+        fullName?: string
+        accountType?: string
+      })
+    | null
+    | undefined
+): AuthUser | null {
+  if (!data?.id || !data?.email) return null
+  const name = data.name ?? data.fullName
+  return {
+    id: String(data.id),
+    email: String(data.email),
+    name: name ? String(name) : undefined,
+    fullName: data.fullName ? String(data.fullName) : data.name ? String(data.name) : undefined,
+    accountType: data.accountType ? String(data.accountType) : undefined,
+    systemRole: data.systemRole,
+    role: data.role
+  }
+}
+
+/** True when API role is the plain end-user role (not allowed in this admin app). */
+export function isBlockedEndUserRole(user: Pick<AuthUser, 'systemRole' | 'role'> | null | undefined): boolean {
+  const r = user?.systemRole ?? user?.role
+  return r === 'USER'
+}
 
 // ─── Service Classes ──────────────────────────────────────────────────────
 

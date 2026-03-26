@@ -33,8 +33,36 @@ const colorMode = useColorMode()
 const isProfileOpen = ref(false)
 const profileRef = ref<HTMLElement | null>(null)
 
-const displayName = computed(() => props.userName || auth.user?.name || props.userEmail || auth.user?.email || 'Account')
-const displayEmail = computed(() => props.userEmail || auth.user?.email || 'Guest')
+function formatAccountLabel(raw: string | undefined): string {
+  if (!raw) return ''
+  const s = String(raw).trim()
+  if (!s) return ''
+  return s
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+const displayName = computed(() => {
+  const u = auth.user
+  const fromProps = props.userName?.trim()
+  if (fromProps) return fromProps
+  const n = u?.name?.trim() || u?.fullName?.trim()
+  if (n) return n
+  const em = u?.email || (props.userEmail && props.userEmail !== 'Guest' ? props.userEmail : undefined)
+  if (em) return em.split('@')[0] || em
+  return 'Account'
+})
+
+/** Second line: account type / role; never show literal "Guest" when we have a real user */
+const displaySubtitle = computed(() => {
+  const u = auth.user
+  const roleBits = [u?.accountType, u?.systemRole, u?.role].filter(Boolean) as string[]
+  const primary = roleBits[0]
+  if (primary) return formatAccountLabel(primary)
+  const em = u?.email || (props.userEmail && props.userEmail !== 'Guest' ? props.userEmail : undefined)
+  return em ?? ''
+})
 
 const toggleTheme = () => {
   colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
@@ -164,7 +192,7 @@ onUnmounted(() => {
                 {{ displayName }}
               </p>
               <p class="truncate text-xs text-gray-500 dark:text-gray-400 max-w-[120px]">
-                {{ displayEmail }}
+                {{ displaySubtitle }}
               </p>
             </div>
             <UIcon name="i-lucide-chevron-down" class="h-4 w-4 shrink-0 text-gray-500" />

@@ -125,11 +125,20 @@ body,
   transform: translateY(-2px);
 }
 
-/* ─── Profile page buttons (small, responsive) ──────────────────────────── */
+/* ─── Profile page buttons (Nuxt UI UButton: use icon + label props; these classes style the root) ─ */
 .profile-btn-primary {
-  @apply !inline-flex min-h-8 w-full cursor-pointer items-center justify-center gap-1.5 !rounded-md px-3 py-1.5 text-xs font-semibold tracking-tight !text-white !shadow-md transition-all duration-300 ease-out sm:min-h-8 sm:w-auto sm:min-w-[90px] sm:px-3 sm:py-1.5 sm:text-xs;
+  @apply !min-h-10 w-full cursor-pointer !rounded-xl !px-4 !py-2.5 text-sm font-semibold !shadow-md transition-all duration-300 ease-out sm:w-auto;
   background: linear-gradient(135deg, rgb(16 185 129) 0%, rgb(5 150 105) 100%) !important;
   box-shadow: 0 4px 6px -1px rgb(16 185 129 / 0.2) !important;
+  border: none !important;
+}
+/* Ensure Nuxt UI inner slots stay visible on gradient */
+.profile-btn-primary :deep([data-slot="base"]) {
+  @apply inline-flex min-h-10 w-full items-center justify-center gap-2 sm:w-auto;
+}
+.profile-btn-primary :deep([data-slot="leadingIcon"]),
+.profile-btn-primary :deep([data-slot="label"]) {
+  color: rgb(255 255 255) !important;
 }
 .profile-btn-primary:hover {
   background: linear-gradient(135deg, rgb(5 150 105) 0%, rgb(4 120 87) 100%) !important;
@@ -142,46 +151,63 @@ body,
 }
 
 .profile-btn-secondary {
-  @apply !inline-flex min-h-8 w-full cursor-pointer items-center justify-center gap-1.5 !rounded-md !border px-3 py-1.5 text-xs font-semibold tracking-tight transition-all duration-300 ease-out sm:min-h-8 sm:w-auto sm:min-w-[100px] sm:px-3 sm:py-1.5 sm:text-xs;
-  border-color: rgb(16 185 129 / 0.6) !important;
+  @apply !min-h-10 w-full cursor-pointer !rounded-xl !border-2 !px-4 !py-2.5 text-sm font-semibold transition-all duration-300 ease-out sm:w-auto;
+  border-color: rgb(16 185 129 / 0.55) !important;
   color: rgb(4 120 87) !important;
   background: transparent !important;
 }
+.profile-btn-secondary :deep([data-slot="base"]) {
+  @apply inline-flex min-h-10 w-full items-center justify-center gap-2 sm:w-auto;
+}
+.profile-btn-secondary :deep([data-slot="leadingIcon"]),
+.profile-btn-secondary :deep([data-slot="label"]) {
+  color: rgb(4 120 87) !important;
+}
 .dark .profile-btn-secondary {
   border-color: rgb(16 185 129 / 0.5) !important;
+}
+.dark .profile-btn-secondary :deep([data-slot="leadingIcon"]),
+.dark .profile-btn-secondary :deep([data-slot="label"]) {
   color: rgb(52 211 153) !important;
 }
 .profile-btn-secondary:hover {
   border-color: rgb(16 185 129) !important;
-  background: rgb(236 253 245 / 0.8) !important;
-  box-shadow: 0 0 0 2px rgb(16 185 129 / 0.1);
+  background: rgb(236 253 245 / 0.85) !important;
+  box-shadow: 0 0 0 2px rgb(16 185 129 / 0.12);
   transform: translateY(-1px);
 }
 .dark .profile-btn-secondary:hover {
-  background: rgb(2 44 34 / 0.5) !important;
+  background: rgb(2 44 34 / 0.45) !important;
 }
 .profile-btn-secondary:active {
   transform: translateY(0);
 }
 
 .profile-btn-danger {
-  @apply !inline-flex min-h-8 w-full cursor-pointer items-center justify-center gap-1.5 !rounded-md !border px-3 py-1.5 text-xs font-semibold tracking-tight transition-all duration-300 ease-out sm:min-h-8 sm:w-auto sm:min-w-[110px] sm:px-3 sm:py-1.5 sm:text-xs;
-  border-color: rgb(239 68 68 / 0.6) !important;
+  @apply !min-h-10 w-full cursor-pointer !rounded-xl !border-2 !px-4 !py-2.5 text-sm font-semibold transition-all duration-300 ease-out sm:w-auto;
+  border-color: rgb(239 68 68 / 0.55) !important;
   color: rgb(185 28 28) !important;
   background: transparent !important;
 }
-.dark .profile-btn-danger {
-  border-color: rgb(239 68 68 / 0.5) !important;
+.profile-btn-danger :deep([data-slot="base"]) {
+  @apply inline-flex min-h-10 w-full items-center justify-center gap-2 sm:w-auto;
+}
+.profile-btn-danger :deep([data-slot="leadingIcon"]),
+.profile-btn-danger :deep([data-slot="label"]) {
+  color: rgb(185 28 28) !important;
+}
+.dark .profile-btn-danger :deep([data-slot="leadingIcon"]),
+.dark .profile-btn-danger :deep([data-slot="label"]) {
   color: rgb(248 113 113) !important;
 }
 .profile-btn-danger:hover {
   border-color: rgb(239 68 68) !important;
-  background: rgb(254 226 226 / 0.8) !important;
-  box-shadow: 0 0 0 2px rgb(239 68 68 / 0.1);
+  background: rgb(254 226 226 / 0.85) !important;
+  box-shadow: 0 0 0 2px rgb(239 68 68 / 0.12);
   transform: translateY(-1px);
 }
 .dark .profile-btn-danger:hover {
-  background: rgb(127 29 29 / 0.5) !important;
+  background: rgb(127 29 29 / 0.4) !important;
 }
 .profile-btn-danger:active {
   transform: translateY(0);

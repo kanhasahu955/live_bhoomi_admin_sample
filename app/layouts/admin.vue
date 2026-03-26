@@ -9,8 +9,6 @@ const auth = useAuth()
 const layout = useLayout()
 const layoutStore = useLayoutStore()
 
-const userEmail = computed(() => auth.user?.email ?? 'Guest')
-
 function handleLogout() {
   auth.logout()
 }
@@ -41,8 +39,6 @@ function handleLogout() {
         :title="layout.pageTitle"
         :description="layout.pageDescription"
         :breadcrumbs="layout.breadcrumbs"
-        :user-email="userEmail"
-        :user-name="auth.user?.name"
         @menu-click="layout.openMobileMenu"
         @open-search="layout.openSearch"
         @logout="handleLogout"

@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { useAuthStore } from '~/stores/auth'
 import { getAuthConfig } from '~/config/auth'
+import type { AuthUser } from '~/services/api'
 
 export interface UseAuthOptions {
   /** Override redirect after logout */
@@ -34,7 +35,7 @@ export function useAuth(options: UseAuthOptions = {}) {
     login,
     logout,
     setToken: (token: string | null) => authStore.setToken(token),
-    setUser: (user: { id: string; email: string; name?: string } | null) => authStore.setUser(user),
+    setUser: (user: AuthUser | null) => authStore.setUser(user),
     loginRedirect,
     logoutRedirect,
   }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useAuth } from '~/composables/useAuth'
-import { useUserService } from '~/services/api'
+import { useUserService, normalizeAuthUser } from '~/services/api'
 
 definePageMeta({
   layout: 'admin',
@@ -112,11 +112,15 @@ async function loadProfile() {
         phone: profile.value.phone ?? '',
         bio: profile.value.bio ?? ''
       }
-      auth.setUser?.({
-        id: profile.value.id ?? '',
-        email: profile.value.email ?? '',
-        name: profile.value.fullName
+      const synced = normalizeAuthUser({
+        id: profile.value.id,
+        email: profile.value.email,
+        name: profile.value.fullName,
+        fullName: profile.value.fullName,
+        accountType: profile.value.accountType,
+        systemRole: profile.value.systemRole
       })
+      if (synced) auth.setUser(synced)
     }
   } catch {
     profile.value = auth.user ? { fullName: auth.user.name, email: auth.user.email } : null
@@ -408,14 +412,13 @@ onMounted(loadProfile)
               <div class="mt-4 flex justify-end">
                 <AppButton
                   :loading="saving"
-                  size="sm"
+                  size="md"
                   color="success"
+                  icon="i-lucide-check"
+                  label="Save changes"
                   class="profile-btn-primary w-full sm:w-auto"
                   @click="saveProfile"
-                >
-                  <UIcon name="i-lucide-check" class="h-3 w-3 shrink-0" />
-                  <span>Save changes</span>
-                </AppButton>
+                />
               </div>
             </div>
           </div>
@@ -469,15 +472,14 @@ onMounted(loadProfile)
               <div class="mt-4 flex justify-end">
                 <AppButton
                   :loading="passwordSaving"
-                  size="sm"
+                  size="md"
                   variant="outline"
                   color="success"
+                  icon="i-lucide-key-round"
+                  label="Update password"
                   class="profile-btn-secondary w-full sm:w-auto"
                   @click="changePassword"
-                >
-                  <UIcon name="i-lucide-key-round" class="h-3 w-3 shrink-0" />
-                  <span>Update password</span>
-                </AppButton>
+                />
               </div>
             </div>
           </div>
@@ -501,16 +503,15 @@ onMounted(loadProfile)
               </p>
               <div class="flex justify-end">
                 <AppButton
-                :loading="deleteLoading"
-                size="sm"
-                variant="outline"
-                color="error"
-                class="profile-btn-danger w-full sm:w-auto"
-                @click="showDeleteModal = true"
-              >
-                <UIcon name="i-lucide-trash-2" class="h-3 w-3 shrink-0" />
-                <span>Delete account</span>
-              </AppButton>
+                  :loading="deleteLoading"
+                  size="md"
+                  variant="outline"
+                  color="error"
+                  icon="i-lucide-trash-2"
+                  label="Delete account"
+                  class="profile-btn-danger w-full sm:w-auto"
+                  @click="showDeleteModal = true"
+                />
               </div>
             </div>
           </div>
@@ -660,18 +661,17 @@ onMounted(loadProfile)
         </p>
       </template>
       <template #footer="{ close }">
-        <div class="flex w-full justify-end gap-2">
-          <AppButton variant="outline" size="sm" @click="close()">
-            Cancel
-          </AppButton>
+        <div class="flex w-full flex-wrap justify-end gap-2">
+          <AppButton variant="outline" size="md" label="Cancel" class="min-h-10" @click="close()" />
           <AppButton
             :loading="deleteLoading"
             color="error"
-            size="sm"
+            size="md"
+            icon="i-lucide-trash-2"
+            label="Delete account"
+            class="min-h-10"
             @click="deleteAccount"
-          >
-            Delete account
-          </AppButton>
+          />
         </div>
       </template>
     </UModal>

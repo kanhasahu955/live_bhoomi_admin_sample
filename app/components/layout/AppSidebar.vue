@@ -2,6 +2,7 @@
 import type { NavItem } from '~/config/layout'
 import { useLayoutStore } from '~/stores/layout'
 import { useRoute } from 'nuxt/app'
+import { isNavItemActive } from '~/utils/nav-path'
 
 interface Props {
   navItems: NavItem[]
@@ -20,18 +21,7 @@ const route = useRoute()
 const collapsed = computed(() => !layoutStore.isSidebarOpen)
 
 function isNavActive(item: NavItem): boolean {
-  const config = useRuntimeConfig()
-  const base = (config.app?.baseURL as string) || '/'
-  const baseClean = base.replace(/^\/+|\/+$/g, '') // e.g. 'admin'
-  let path = (route.path || '/').replace(/^\/+|\/+$/g, '')
-  if (baseClean && path.startsWith(baseClean)) {
-    path = path.slice(baseClean.length).replace(/^\/+/, '') || 'root'
-  } else {
-    path = path || 'root'
-  }
-  const target = (item.to === '/' || item.to === '') ? 'root' : item.to.replace(/^\/+|\/+$/g, '')
-  if (target === 'root') return path === 'root' || path === ''
-  return path === target || path.startsWith(target + '/')
+  return isNavItemActive(route.path, item)
 }
 </script>
 

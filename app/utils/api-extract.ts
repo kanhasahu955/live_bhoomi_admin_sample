@@ -72,6 +72,22 @@ export function extractUsers(res: unknown): Record<string, unknown>[] {
   return arr ?? []
 }
 
+/** Admin /profile list responses: { profiles }, { data: [...] }, paginated items, etc. */
+export function extractProfiles(res: unknown): Record<string, unknown>[] {
+  if (!res || typeof res !== 'object') return []
+  const data = get(res, 'data') ?? res
+  const raw =
+    (Array.isArray(data) ? data : null) ??
+    get(data, 'profiles') ??
+    get(data, 'items') ??
+    get(data, 'results') ??
+    get(data, 'records') ??
+    get(res, 'profiles') ??
+    (Array.isArray(res) ? res : null)
+  const arr = Array.isArray(raw) ? raw : toArray(raw)
+  return arr ?? []
+}
+
 export function extractMetadata(res: unknown): { total?: number } | undefined {
   if (!res || typeof res !== 'object') return undefined
   const meta =
@@ -79,4 +95,57 @@ export function extractMetadata(res: unknown): { total?: number } | undefined {
     get(res, 'data.metadata') ??
     get((res as Record<string, unknown>).data as object, 'metadata')
   return meta as { total?: number } | undefined
+}
+
+/** Pagination from list APIs: metadata / meta / pagination / top-level total */
+export interface PaginationMeta {
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+}
+
+export function extractPaginationMeta(
+  res: unknown,
+  requestPage: number,
+  requestLimit: number
+): PaginationMeta | null {
+  if (!res || typeof res !== 'object') return null
+  const root = res as Record<string, unknown>
+  const metaBlock =
+    get(root, 'metadata') ??
+    get(root, 'data.metadata') ??
+    get(root, 'meta') ??
+    get(root, 'data.meta') ??
+    get(root, 'pagination')
+
+  let total: number | undefined
+  let page: number | undefined
+  let lim: number | undefined
+  let totalPages: number | undefined
+
+  if (metaBlock && typeof metaBlock === 'object') {
+    const m = metaBlock as Record<string, unknown>
+    total = Number(m.total ?? m.totalCount ?? m.totalItems)
+    page = Number(m.page ?? m.currentPage ?? m.pageNumber)
+    lim = Number(m.limit ?? m.perPage ?? m.pageSize ?? m.size)
+    totalPages = Number(m.totalPages ?? m.lastPage ?? m.pages)
+  }
+
+  const topTotal = Number(
+    root.total ?? get(root, 'data.total') ?? get(root, 'data.totalCount')
+  )
+  if (!Number.isFinite(total) && Number.isFinite(topTotal)) {
+    total = topTotal
+  }
+
+  if (!Number.isFinite(total) || total < 0) return null
+
+  if (!Number.isFinite(page) || page < 1) page = requestPage
+  if (!Number.isFinite(lim) || lim < 1) lim = requestLimit
+  if (!Number.isFinite(totalPages) || totalPages < 1) {
+    totalPages = Math.max(1, Math.ceil(total / lim))
+  }
+
+  return { total, page, limit: lim, totalPages }
 }
