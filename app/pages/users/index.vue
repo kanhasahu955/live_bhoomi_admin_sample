@@ -5,7 +5,10 @@ import UBadge from '@nuxt/ui/components/Badge.vue'
 import UButton from '@nuxt/ui/components/Button.vue'
 import UIcon from '@nuxt/ui/components/Icon.vue'
 import { NuxtLink } from '#components'
-import { useAdminService } from '~/services/api'
+import AppButton from '~/components/ui/AppButton.vue'
+import { useAdminService, isSuperAdmin } from '~/services/api'
+import { useAuthStore } from '~/stores/auth'
+import { useAdminUsersListRefresh } from '~/composables/useAdminUsersListRefresh'
 import { get } from '~/utils/lodash'
 import { extractUsers, extractPaginationMeta, type PaginationMeta } from '~/utils/api-extract'
 
@@ -18,13 +21,18 @@ definePageMeta({
 const ALL = '__all__'
 
 const adminService = useAdminService()
+const authStore = useAuthStore()
 const toast = useToast()
+const { bump } = useAdminUsersListRefresh()
+
+const isSuperAdminUser = computed(() => isSuperAdmin(authStore.user))
 
 const usersRaw = ref<Record<string, unknown>[]>([])
 const loading = ref(false)
 const page = ref(1)
 const pageSize = ref(10)
 const metadata = ref<PaginationMeta | null>(null)
+const lastUpdatedAt = ref<Date | null>(null)
 
 const filters = ref({
   search: '',
@@ -43,7 +51,10 @@ const pageSizeOptions = [
 const roleFilterOptions = [
   { label: 'All roles', value: ALL },
   { label: 'User', value: 'USER' },
+  { label: 'Staff', value: 'STAFF' },
+  { label: 'Manager', value: 'MANAGER' },
   { label: 'Admin', value: 'ADMIN' },
+  { label: 'Superadmin', value: 'SUPERADMIN' },
   { label: 'Partner', value: 'PARTNER' },
   { label: 'Agent', value: 'AGENT' },
   { label: 'Moderator', value: 'MODERATOR' }
@@ -52,10 +63,11 @@ const roleFilterOptions = [
 const statusFilterOptions = [
   { label: 'All statuses', value: ALL },
   { label: 'Active', value: 'ACTIVE' },
-  { label: 'Inactive', value: 'INACTIVE' },
+  { label: 'Pending verification', value: 'PENDING_VERIFICATION' },
   { label: 'Suspended', value: 'SUSPENDED' },
-  { label: 'Pending', value: 'PENDING' },
-  { label: 'Verified', value: 'VERIFIED' }
+  { label: 'Banned', value: 'BANNED' },
+  { label: 'Deactivated', value: 'DEACTIVATED' },
+  { label: 'Deleted', value: 'DELETED' }
 ]
 
 const sortByOptions = [
@@ -110,6 +122,7 @@ async function loadUsers() {
     } else {
       metadata.value = buildFallbackMeta(list)
     }
+    lastUpdatedAt.value = new Date()
   } catch (e) {
     usersRaw.value = []
     metadata.value = null
@@ -118,6 +131,41 @@ async function loadUsers() {
   } finally {
     loading.value = false
   }
+}
+
+const activeFilterCount = computed(() => {
+  let n = 0
+  if (filters.value.search.trim()) n++
+  if (filters.value.systemRole !== ALL) n++
+  if (filters.value.status !== ALL) n++
+  return n
+})
+
+function formatTime(d: Date | null): string {
+  if (!d) return '—'
+  try {
+    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  } catch {
+    return '—'
+  }
+}
+
+function copyPageEmails() {
+  if (!isSuperAdminUser.value) return
+  const emails = sortedUsers.value
+    .map((r) => get(r, 'email'))
+    .filter((e): e is string => typeof e === 'string' && e.length > 0)
+  if (!emails.length) {
+    toast.add({ title: 'Nothing to copy', description: 'No emails on this page.', color: 'warning', icon: 'i-lucide-info' })
+    return
+  }
+  void navigator.clipboard.writeText(emails.join('\n'))
+  toast.add({
+    title: 'Copied',
+    description: `${emails.length} email(s) copied to clipboard.`,
+    color: 'success',
+    icon: 'i-lucide-copy-check'
+  })
 }
 
 function formatLabel(raw: unknown): string {
@@ -214,6 +262,10 @@ function goLastPage() {
 }
 
 function exportCsv() {
+  if (!isSuperAdminUser.value) {
+    toast.add({ title: 'Export', description: 'Only Superadmin can export.', color: 'warning', icon: 'i-lucide-lock' })
+    return
+  }
   const rows = sortedUsers.value
   if (!rows.length) {
     toast.add({ title: 'Export', description: 'No rows to export.', color: 'warning', icon: 'i-lucide-info' })
@@ -269,12 +321,39 @@ const columnOrder = ref([
   'actions'
 ])
 
-const columns = computed(() => [
+watch(
+  isSuperAdminUser,
+  (sup) => {
+    const o = columnOrder.value.filter((c) => c !== 'phone')
+    if (sup) {
+      const i = o.indexOf('email')
+      if (i !== -1 && !o.includes('phone')) {
+        columnOrder.value = [...o.slice(0, i + 1), 'phone', ...o.slice(i + 1)]
+      }
+    } else {
+      columnOrder.value = o
+    }
+  },
+  { immediate: true }
+)
+
+const columns = computed(() => {
+  const phoneCol = {
+    id: 'phone',
+    header: 'Phone',
+    size: 120,
+    cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
+      const v = get(row.original, 'phone') ?? get(row.original, 'mobile')
+      return v ? String(v) : '—'
+    }
+  }
+
+  return [
   {
     id: 'user',
     header: 'User',
     size: 200,
-    cell: ({ row }) => {
+    cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
       const r = row.original as Record<string, unknown>
       const id = String(get(r, 'id') ?? '')
       const primary = displayName(r)
@@ -300,25 +379,17 @@ const columns = computed(() => [
     accessorKey: 'email',
     header: 'Email',
     size: 200,
-    cell: ({ row }) => {
+    cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
       const v = get(row.original, 'email')
       return v ? String(v) : '—'
     }
   },
-  {
-    id: 'phone',
-    header: 'Phone',
-    size: 120,
-    cell: ({ row }) => {
-      const v = get(row.original, 'phone') ?? get(row.original, 'mobile')
-      return v ? String(v) : '—'
-    }
-  },
+  ...(isSuperAdminUser.value ? [phoneCol] : []),
   {
     id: 'accountType',
     header: 'Type',
     size: 100,
-    cell: ({ row }) => {
+    cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
       const v = get(row.original, 'accountType')
       if (!v) return '—'
       return h(UBadge, { color: 'neutral', variant: 'subtle', size: 'sm' }, () => formatLabel(v))
@@ -328,7 +399,7 @@ const columns = computed(() => [
     id: 'role',
     header: 'Role',
     size: 120,
-    cell: ({ row }) => {
+    cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
       const r = row.original as Record<string, unknown>
       const role = String(get(r, 'systemRole') ?? get(r, 'role') ?? '—')
       if (role === '—') return '—'
@@ -343,7 +414,7 @@ const columns = computed(() => [
     id: 'status',
     header: 'Status',
     size: 110,
-    cell: ({ row }) => {
+    cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
       const r = row.original as Record<string, unknown>
       const s = String(get(r, 'status') ?? get(r, 'accountStatus') ?? '—')
       if (s === '—') return '—'
@@ -363,7 +434,7 @@ const columns = computed(() => [
     id: 'created',
     header: 'Created',
     size: 130,
-    cell: ({ row }) => {
+    cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
       const r = row.original as Record<string, unknown>
       const d = get(r, 'createdAt') ?? get(r, 'created_at')
       if (!d) return '—'
@@ -388,25 +459,27 @@ const columns = computed(() => [
         td: 'text-right'
       }
     },
-    cell: ({ row }) => {
+    cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
       const r = row.original as Record<string, unknown>
       const id = String(get(r, 'id') ?? '')
       if (!id) return '—'
       return h(
-        UButton,
+        AppButton,
         {
           size: 'sm',
-          variant: 'soft',
-          color: 'primary',
+          color: 'success',
+          variant: 'solid',
           icon: 'i-lucide-arrow-right',
+          label: 'View',
           to: `/users/${id}`,
-          class: 'rounded-lg'
-        },
-        () => 'View'
+          class:
+            '!min-h-9 !rounded-xl !px-3.5 !text-xs !font-semibold !shadow-md !shadow-emerald-600/25 !ring-2 !ring-emerald-500/30 hover:!brightness-110 dark:!ring-emerald-400/35'
+        }
       )
     }
   }
-])
+  ]
+})
 
 watch([page, pageSize], loadUsers, { immediate: true })
 
@@ -427,29 +500,61 @@ watch(
     if (prev === 1) loadUsers()
   }
 )
+
+watch(bump, () => {
+  loadUsers()
+})
 </script>
 
 <template>
   <AppStack gap="lg" class="!gap-6">
     <div
-      class="users-shell w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-[0_1px_0_rgba(0,0,0,0.04),0_20px_50px_-12px_rgba(0,0,0,0.12)] ring-1 ring-black/[0.03] dark:border-gray-800 dark:bg-[linear-gradient(180deg,rgb(17_24_39)_0%,rgb(3_7_18)_100%)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_24px_48px_-12px_rgba(0,0,0,0.65)] dark:ring-white/[0.06]"
+      class="users-panel w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-[0_1px_0_rgba(0,0,0,0.04),0_20px_50px_-12px_rgba(0,0,0,0.12)] ring-1 ring-black/[0.03] dark:border-gray-800 dark:bg-[linear-gradient(180deg,rgb(17_24_39)_0%,rgb(3_7_18)_100%)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_24px_48px_-12px_rgba(0,0,0,0.65)] dark:ring-white/[0.06]"
     >
       <div class="flex min-w-0 flex-col">
+        <!-- Helper + export + refresh (same pattern as Partners) -->
         <div
           class="flex flex-col gap-3 border-b border-gray-200/80 bg-gray-50/50 px-5 py-4 dark:border-gray-800/80 dark:bg-gray-900/40 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6"
         >
-          <p class="min-w-0 max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-            Search by name or email, filter by role and status, sort results, and open a user for account actions.
-            <span class="mt-1 block text-xs text-gray-500 dark:text-gray-500"
-              >API: <code class="rounded bg-gray-100 px-1 py-0.5 font-mono text-[11px] dark:bg-gray-800">GET /admin/users/list</code></span
+          <div class="min-w-0 max-w-2xl space-y-2">
+            <p class="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+              Search by name or email, filter by role and status, then open a user to manage account details.
+              <template v-if="isSuperAdminUser">
+                Phone numbers appear only for Superadmin. Use
+                <span class="font-medium text-emerald-700 dark:text-emerald-400">Export CSV</span>
+                or
+                <span class="font-medium text-emerald-700 dark:text-emerald-400">Copy emails</span>
+                for the current page.
+              </template>
+              <template v-else>
+                Phone numbers and bulk export are restricted to Superadmin.
+              </template>
+            </p>
+            <div
+              v-if="metadata"
+              class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400"
             >
-          </p>
-          <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+              <span class="inline-flex items-center gap-1.5">
+                <UIcon name="i-lucide-users" class="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span class="font-medium text-gray-700 dark:text-gray-200">{{ metadata.total }}</span>
+                total
+              </span>
+              <span class="text-gray-400 dark:text-gray-600">·</span>
+              <span>{{ sortedUsers.length }} on this page</span>
+              <span v-if="activeFilterCount > 0" class="text-emerald-700 dark:text-emerald-400">
+                · {{ activeFilterCount }} filter(s) active
+              </span>
+              <span class="text-gray-400 dark:text-gray-600">·</span>
+              <span>Updated {{ formatTime(lastUpdatedAt) }}</span>
+            </div>
+          </div>
+          <div class="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end">
             <AppButton
+              v-if="isSuperAdminUser"
               icon="i-lucide-download"
               size="sm"
               variant="outline"
-              class="w-full rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
+              class="w-full shrink-0 justify-center rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
               :disabled="loading || !sortedUsers.length"
               @click="exportCsv"
             >
@@ -459,7 +564,7 @@ watch(
               icon="i-lucide-refresh-cw"
               size="sm"
               variant="outline"
-              class="w-full shrink-0 rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
+              class="w-full shrink-0 justify-center rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
               :loading="loading"
               @click="refresh"
             >
@@ -476,14 +581,12 @@ watch(
               class="inline-flex shrink-0 items-center gap-2 rounded-full bg-emerald-600/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-emerald-800 ring-1 ring-emerald-600/20 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-400/25"
             >
               <UIcon name="i-lucide-sliders-horizontal" class="size-3.5" />
-              Search &amp; filters
+              Filters
             </span>
-            <span class="min-w-0 text-xs text-gray-500 dark:text-gray-500"
-              >Filters are sent as query params; the table also sorts the current page for consistent ordering.</span
-            >
+            <span class="min-w-0 text-xs text-gray-500 dark:text-gray-500">Refine the user list — Enter applies search.</span>
           </div>
 
-          <div class="grid min-w-0 gap-4 lg:grid-cols-12 lg:items-end lg:gap-4">
+          <div class="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end lg:gap-4">
             <div class="space-y-1.5 lg:col-span-4">
               <label class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Search</label>
               <UInput
@@ -537,13 +640,38 @@ watch(
             </div>
           </div>
 
-          <div class="mt-4 flex flex-wrap gap-2">
-            <AppButton color="success" size="md" icon="i-lucide-filter" class="rounded-xl shadow-md shadow-emerald-600/20" @click="applyFilters">
-              Apply
+          <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <AppButton
+              v-if="isSuperAdminUser"
+              icon="i-lucide-copy"
+              size="sm"
+              variant="ghost"
+              class="w-full justify-start text-gray-600 hover:bg-emerald-500/10 hover:text-emerald-800 dark:text-gray-400 dark:hover:text-emerald-300 sm:w-auto"
+              :disabled="loading || !sortedUsers.length"
+              @click="copyPageEmails"
+            >
+              Copy emails (this page)
             </AppButton>
-            <AppButton variant="outline" size="md" icon="i-lucide-rotate-ccw" class="rounded-xl" @click="resetFilters">
-              Reset
-            </AppButton>
+            <div class="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end sm:ml-auto">
+              <AppButton
+                color="success"
+                size="md"
+                icon="i-lucide-filter"
+                class="flex-1 rounded-xl shadow-md shadow-emerald-600/20 sm:flex-none sm:min-w-[6.5rem]"
+                @click="applyFilters"
+              >
+                Apply
+              </AppButton>
+              <AppButton
+                variant="outline"
+                size="md"
+                icon="i-lucide-rotate-ccw"
+                class="flex-1 rounded-xl border-gray-300 bg-white/90 dark:border-gray-600 dark:bg-gray-900/50 sm:flex-none sm:min-w-[6.5rem]"
+                @click="resetFilters"
+              >
+                Reset
+              </AppButton>
+            </div>
           </div>
         </div>
 

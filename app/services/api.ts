@@ -106,6 +106,26 @@ export function isBlockedEndUserRole(user: Pick<AuthUser, 'systemRole' | 'role'>
   return r === 'USER'
 }
 
+export function getSystemRole(user: Pick<AuthUser, 'systemRole' | 'role'> | null | undefined): string {
+  return String(user?.systemRole ?? user?.role ?? '')
+}
+
+/** PATCH /admin/users/:id/role — API allows only SUPERADMIN. */
+export function isSuperAdmin(user: Pick<AuthUser, 'systemRole' | 'role'> | null | undefined): boolean {
+  return getSystemRole(user) === 'SUPERADMIN'
+}
+
+/** PATCH /admin/users/:id/status — STAFF, MANAGER, ADMIN, or SUPERADMIN. */
+export function canUpdateUserStatus(user: Pick<AuthUser, 'systemRole' | 'role'> | null | undefined): boolean {
+  const r = getSystemRole(user)
+  return ['STAFF', 'MANAGER', 'ADMIN', 'SUPERADMIN'].includes(r)
+}
+
+/** PATCH /admin/users/:id/role — SUPERADMIN only. */
+export function canUpdateUserRole(user: Pick<AuthUser, 'systemRole' | 'role'> | null | undefined): boolean {
+  return isSuperAdmin(user)
+}
+
 // ─── Service Classes ──────────────────────────────────────────────────────
 
 export class AuthService extends BaseService {

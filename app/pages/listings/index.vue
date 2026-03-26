@@ -4,6 +4,7 @@ import UBadge from '@nuxt/ui/components/Badge.vue'
 import UButton from '@nuxt/ui/components/Button.vue'
 import UIcon from '@nuxt/ui/components/Icon.vue'
 import { NuxtLink } from '#components'
+import AppButton from '~/components/ui/AppButton.vue'
 import { useListingsService, useAdminService } from '~/services/api'
 import { get } from '~/utils/lodash'
 import { extractPaginationMeta, type PaginationMeta } from '~/utils/api-extract'
@@ -14,8 +15,11 @@ definePageMeta({
   description: 'Manage and moderate property listings'
 })
 
+const ALL = '__all__'
+
 const listingsService = useListingsService()
 const adminService = useAdminService()
+const toast = useToast()
 
 const listings = ref<Record<string, unknown>[]>([])
 const metadata = ref<PaginationMeta | null>(null)
@@ -23,13 +27,61 @@ const loading = ref(false)
 const actionLoading = ref<string | null>(null)
 const page = ref(1)
 const pageSize = ref(10)
-const locationFilter = ref('')
+
+const filters = ref({
+  location: '',
+  category: ALL as string,
+  type: ALL as string,
+  purpose: ALL as string,
+  approvalStatus: ALL as string
+})
 
 const pageSizeOptions = [
   { label: '10 / page', value: 10 },
   { label: '25 / page', value: 25 },
   { label: '50 / page', value: 50 }
 ]
+
+const categoryOptions = [
+  { label: 'All categories', value: ALL },
+  { label: 'Residential', value: 'RESIDENTIAL' },
+  { label: 'Commercial', value: 'COMMERCIAL' },
+  { label: 'Industrial', value: 'INDUSTRIAL' },
+  { label: 'Land', value: 'LAND' }
+]
+
+const typeOptions = [
+  { label: 'All types', value: ALL },
+  { label: 'Apartment', value: 'APARTMENT' },
+  { label: 'Villa', value: 'VILLA' },
+  { label: 'House', value: 'HOUSE' },
+  { label: 'Plot', value: 'PLOT' },
+  { label: 'Studio', value: 'STUDIO' }
+]
+
+const purposeOptions = [
+  { label: 'All purposes', value: ALL },
+  { label: 'Sale', value: 'SALE' },
+  { label: 'Rent', value: 'RENT' }
+]
+
+const statusOptions = [
+  { label: 'All statuses', value: ALL },
+  { label: 'Published', value: 'PUBLISHED' },
+  { label: 'Pending', value: 'PENDING' },
+  { label: 'Rejected', value: 'REJECTED' },
+  { label: 'Draft', value: 'DRAFT' }
+]
+
+const activeFilterCount = computed(() => {
+  let n = 0
+  if (filters.value.location.trim()) n++
+  if (filters.value.category !== ALL) n++
+  if (filters.value.type !== ALL) n++
+  if (filters.value.purpose !== ALL) n++
+  if (filters.value.approvalStatus !== ALL) n++
+  return n
+})
 
 function formatPrice(value: unknown): string {
   const n = Number(value)
@@ -39,6 +91,21 @@ function formatPrice(value: unknown): string {
   return `₹${n.toLocaleString()}`
 }
 
+/** Refine current page when API ignores some query params. */
+function rowMatchesFilters(row: Record<string, unknown>): boolean {
+  const f = filters.value
+  if (f.category !== ALL && String(get(row, 'category') ?? '') !== f.category) return false
+  if (f.type !== ALL && String(get(row, 'type') ?? '').toUpperCase() !== f.type.toUpperCase()) return false
+  if (f.purpose !== ALL && String(get(row, 'purpose') ?? '').toUpperCase() !== f.purpose.toUpperCase()) return false
+  if (f.approvalStatus !== ALL) {
+    const st = String(get(row, 'approvalStatus') ?? get(row, 'status') ?? '')
+    if (st !== f.approvalStatus) return false
+  }
+  return true
+}
+
+const displayListings = computed(() => listings.value.filter(rowMatchesFilters))
+
 const columns = computed(() => {
   void actionLoading.value
   return [
@@ -46,18 +113,34 @@ const columns = computed(() => {
       id: 'listing',
       header: 'Listing',
       size: 240,
-      cell: ({ row }) => {
+      cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
         const url = get(row.original, 'thumbnailUrl')
         const title = get(row.original, 'title') ?? get(row.original, 'project.name') ?? 'Untitled'
         const id = get(row.original, 'id')
         const thumb = url
-          ? h('img', { src: String(url), alt: '', class: 'size-10 shrink-0 rounded border border-gray-200 object-cover dark:border-gray-700' })
-          : h('div', { class: 'flex size-10 shrink-0 items-center justify-center rounded border border-gray-200 bg-gray-100 dark:border-gray-700 dark:bg-gray-800' }, [
-            h(UIcon, { name: 'i-lucide-home', class: 'size-5 text-gray-400' })
-          ])
+          ? h('img', {
+              src: String(url),
+              alt: '',
+              class: 'size-10 shrink-0 rounded border border-gray-200 object-cover dark:border-gray-700'
+            })
+          : h(
+              'div',
+              {
+                class:
+                  'flex size-10 shrink-0 items-center justify-center rounded border border-gray-200 bg-gray-100 dark:border-gray-700 dark:bg-gray-800'
+              },
+              [h(UIcon, { name: 'i-lucide-home', class: 'size-5 text-gray-400' })]
+            )
         return h('div', { class: 'flex items-center gap-3' }, [
           thumb,
-          h(NuxtLink, { to: `/listings/${id}`, class: 'font-medium text-gray-900 hover:underline dark:text-white' }, () => title)
+          h(
+            NuxtLink,
+            {
+              to: `/listings/${id}`,
+              class: 'font-medium text-emerald-700 hover:underline dark:text-emerald-400'
+            },
+            () => title
+          )
         ])
       }
     },
@@ -68,7 +151,7 @@ const columns = computed(() => {
       id: 'approvalStatus',
       header: 'Status',
       size: 110,
-      cell: ({ row }) => {
+      cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
         const status = get(row.original, 'approvalStatus') ?? get(row.original, 'status') as string
         const color = status === 'PUBLISHED' ? 'success' : status === 'REJECTED' ? 'error' : 'neutral'
         return h(UBadge, { color, size: 'sm' }, () => status ?? '—')
@@ -78,7 +161,7 @@ const columns = computed(() => {
       id: 'price',
       header: 'Price',
       size: 140,
-      cell: ({ row }) => {
+      cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
         const amount = get(row.original, 'amount') ?? get(row.original, 'price')
         const priceType = get(row.original, 'priceType')
         const billingPeriod = get(row.original, 'billingPeriod')
@@ -95,7 +178,7 @@ const columns = computed(() => {
       id: 'location',
       header: 'Location',
       size: 120,
-      cell: ({ row }) => {
+      cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
         const city = get(row.original, 'city') ?? get(row.original, 'project.city')
         return city ?? '—'
       }
@@ -110,7 +193,7 @@ const columns = computed(() => {
           td: 'text-right'
         }
       },
-      cell: ({ row }) => {
+      cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
         const id = get(row.original, 'id') as string
         const status = get(row.original, 'approvalStatus') ?? get(row.original, 'status') as string
         const isLoading = actionLoading.value === id
@@ -120,9 +203,10 @@ const columns = computed(() => {
             variant: 'soft',
             color: 'primary',
             icon: 'i-lucide-external-link',
+            label: 'View',
             to: `/listings/${id}`,
-            'aria-label': 'View',
-            class: 'rounded-lg'
+            class:
+              'min-h-9 rounded-lg px-3 font-semibold ring-1 ring-emerald-500/25 hover:bg-emerald-500/10 dark:ring-emerald-400/30'
           }),
           status !== 'PUBLISHED' &&
             h(UButton, {
@@ -130,9 +214,9 @@ const columns = computed(() => {
               variant: 'soft',
               color: 'success',
               icon: 'i-lucide-check',
+              label: 'Publish',
               loading: isLoading,
-              'aria-label': 'Publish',
-              class: 'rounded-lg',
+              class: 'min-h-9 rounded-lg',
               onClick: () => publishListing(id)
             })
         ].filter(Boolean))
@@ -154,15 +238,22 @@ const columnOrder = ref([
 
 const searchParams = computed(() => {
   const params: Record<string, string | number> = { page: page.value, limit: pageSize.value }
-  const city = locationFilter.value.trim()
+  const city = filters.value.location.trim()
   if (city) params.city = city
+  if (filters.value.category !== ALL) params.category = filters.value.category
+  if (filters.value.type !== ALL) params.type = filters.value.type
+  if (filters.value.purpose !== ALL) params.purpose = filters.value.purpose
+  if (filters.value.approvalStatus !== ALL) {
+    params.approvalStatus = filters.value.approvalStatus
+    params.status = filters.value.approvalStatus
+  }
   return params
 })
 
 async function loadListings() {
   loading.value = true
   try {
-    const res = await listingsService.searchPublic(searchParams.value) as unknown
+    const res = (await listingsService.searchPublic(searchParams.value)) as unknown
     const data = get(res, 'data') ?? res
     listings.value = (get(data, 'listings') ?? get(res, 'listings') ?? []) as Record<string, unknown>[]
 
@@ -194,9 +285,11 @@ async function loadListings() {
           : null
       }
     }
-  } catch {
+  } catch (e) {
     listings.value = []
     metadata.value = null
+    const msg = e instanceof Error ? e.message : 'Failed to load listings'
+    toast.add({ title: 'Listings', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
   } finally {
     loading.value = false
   }
@@ -207,6 +300,10 @@ async function publishListing(id: string) {
   try {
     await adminService.publishListing(id)
     await loadListings()
+    toast.add({ title: 'Published', description: 'Listing is now live.', color: 'success', icon: 'i-lucide-check' })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Publish failed'
+    toast.add({ title: 'Publish failed', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
   } finally {
     actionLoading.value = null
   }
@@ -216,17 +313,64 @@ function refresh() {
   loadListings()
 }
 
-function applyLocationFilter() {
+function applyFilters() {
   const prev = page.value
   page.value = 1
   if (prev === 1) loadListings()
 }
 
-function clearLocation() {
-  locationFilter.value = ''
+function resetFilters() {
+  filters.value = {
+    location: '',
+    category: ALL,
+    type: ALL,
+    purpose: ALL,
+    approvalStatus: ALL
+  }
   const prev = page.value
   page.value = 1
   if (prev === 1) loadListings()
+}
+
+function exportCsv() {
+  const rows = displayListings.value
+  if (!rows.length) {
+    toast.add({ title: 'Export', description: 'No rows to export.', color: 'warning', icon: 'i-lucide-info' })
+    return
+  }
+  const escape = (v: string) => {
+    if (/[",\n]/.test(v)) return `"${v.replace(/"/g, '""')}"`
+    return v
+  }
+  const header = ['Title', 'Category', 'Type', 'Purpose', 'Status', 'Price', 'Location', 'Id']
+  const lines = [
+    header.join(','),
+    ...rows.map((r) => {
+      const title = String(get(r, 'title') ?? get(r, 'project.name') ?? '')
+      const rawPrice = get(r, 'amount') ?? get(r, 'price')
+      const price =
+        rawPrice != null && rawPrice !== '' ? formatPrice(rawPrice) : ''
+      const city = String(get(r, 'city') ?? get(r, 'project.city') ?? '')
+      return [
+        escape(title),
+        escape(String(get(r, 'category') ?? '')),
+        escape(String(get(r, 'type') ?? '')),
+        escape(String(get(r, 'purpose') ?? '')),
+        escape(String(get(r, 'approvalStatus') ?? get(r, 'status') ?? '')),
+        escape(price),
+        escape(city),
+        escape(String(get(r, 'id') ?? ''))
+      ].join(',')
+    })
+  ]
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `listings-page-${page.value}-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+  toast.add({ title: 'Exported', description: `${rows.length} row(s) downloaded.`, color: 'success', icon: 'i-lucide-download' })
 }
 
 function goPrev() {
@@ -249,6 +393,15 @@ function goLastPage() {
   }
 }
 
+function onAddListing() {
+  toast.add({
+    title: 'Add listing',
+    description: 'New listings are usually created from the partner or mobile app. This button is reserved for a future admin flow.',
+    color: 'primary',
+    icon: 'i-lucide-info'
+  })
+}
+
 watch([page], loadListings, { immediate: true })
 
 watch(pageSize, () => {
@@ -267,23 +420,42 @@ watch(pageSize, () => {
         <div
           class="flex flex-col gap-3 border-b border-gray-200/80 bg-gray-50/50 px-5 py-4 dark:border-gray-800/80 dark:bg-gray-900/40 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6"
         >
-          <p class="min-w-0 max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-            Browse listings, open details, or publish when moderation is required.
-          </p>
-          <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+          <div class="min-w-0 max-w-2xl space-y-1">
+            <p class="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+              Browse listings, filter by location and attributes, export the current page, or publish when moderation is required.
+            </p>
+            <p
+              v-if="metadata && activeFilterCount > 0"
+              class="text-xs text-emerald-700 dark:text-emerald-400"
+            >
+              {{ activeFilterCount }} filter(s) active · table also refines the current page if the API omits some params.
+            </p>
+          </div>
+          <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end">
             <AppButton
               icon="i-lucide-plus"
               size="sm"
               color="success"
-              class="w-full rounded-xl shadow-md shadow-emerald-600/20 sm:w-auto"
+              class="listings-toolbar-btn w-full justify-center rounded-xl shadow-md shadow-emerald-600/20 sm:w-auto"
+              @click="onAddListing"
             >
               Add Listing
+            </AppButton>
+            <AppButton
+              icon="i-lucide-download"
+              size="sm"
+              variant="outline"
+              class="listings-toolbar-btn w-full shrink-0 justify-center rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
+              :disabled="loading || !displayListings.length"
+              @click="exportCsv"
+            >
+              Export CSV
             </AppButton>
             <AppButton
               icon="i-lucide-refresh-cw"
               size="sm"
               variant="outline"
-              class="w-full shrink-0 rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
+              class="listings-toolbar-btn w-full shrink-0 justify-center rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
               :loading="loading"
               @click="refresh"
             >
@@ -302,37 +474,83 @@ watch(pageSize, () => {
               <UIcon name="i-lucide-sliders-horizontal" class="size-3.5" />
               Filters
             </span>
-            <span class="min-w-0 text-xs text-gray-500 dark:text-gray-500">Filter by city or location</span>
+            <span class="min-w-0 text-xs text-gray-500 dark:text-gray-500">Use Apply after changing filters. Reset clears all.</span>
           </div>
-          <div class="grid min-w-0 gap-4 sm:grid-cols-1 lg:grid-cols-12 lg:items-end lg:gap-4">
-            <div class="space-y-1.5 lg:col-span-8">
+
+          <div class="grid min-w-0 gap-4 lg:grid-cols-12 lg:items-end lg:gap-4">
+            <div class="space-y-1.5 lg:col-span-3">
               <label class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Location</label>
               <UInput
-                v-model="locationFilter"
-                placeholder="Filter by city or location"
+                v-model="filters.location"
+                placeholder="City or area"
                 icon="i-lucide-map-pin"
                 size="md"
                 class="w-full rounded-xl shadow-sm"
-                @keydown.enter="applyLocationFilter"
+                @keydown.enter="applyFilters"
               />
             </div>
-            <div class="flex flex-wrap gap-2 lg:col-span-4 lg:justify-end">
-              <AppButton
-                v-if="locationFilter"
-                variant="outline"
+            <div class="space-y-1.5 lg:col-span-2">
+              <label class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Category</label>
+              <USelect
+                v-model="filters.category"
+                :items="categoryOptions"
                 size="md"
-                icon="i-lucide-x"
-                class="flex-1 rounded-xl border-gray-300 bg-white/90 dark:border-gray-600 dark:bg-gray-900/50 lg:flex-none"
-                @click="clearLocation"
-              >
-                Clear
-              </AppButton>
+                class="w-full rounded-xl"
+                :content="{ class: 'z-[9999]' }"
+              />
+            </div>
+            <div class="space-y-1.5 lg:col-span-2">
+              <label class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Type</label>
+              <USelect
+                v-model="filters.type"
+                :items="typeOptions"
+                size="md"
+                class="w-full rounded-xl"
+                :content="{ class: 'z-[9999]' }"
+              />
+            </div>
+            <div class="space-y-1.5 lg:col-span-2">
+              <label class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Purpose</label>
+              <USelect
+                v-model="filters.purpose"
+                :items="purposeOptions"
+                size="md"
+                class="w-full rounded-xl"
+                :content="{ class: 'z-[9999]' }"
+              />
+            </div>
+            <div class="space-y-1.5 lg:col-span-3">
+              <label class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Status</label>
+              <USelect
+                v-model="filters.approvalStatus"
+                :items="statusOptions"
+                size="md"
+                class="w-full rounded-xl"
+                :content="{ class: 'z-[9999]' }"
+              />
+            </div>
+          </div>
+
+          <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <AppButton
+              v-if="activeFilterCount > 0"
+              variant="ghost"
+              size="sm"
+              icon="i-lucide-rotate-ccw"
+              class="self-start text-gray-600 hover:text-emerald-800 dark:text-gray-400 dark:hover:text-emerald-300"
+              @click="resetFilters"
+            >
+              Reset all filters
+            </AppButton>
+            <div v-else class="hidden sm:block" />
+
+            <div class="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
               <AppButton
                 color="success"
                 size="md"
-                icon="i-lucide-search"
-                class="flex-1 rounded-xl shadow-md shadow-emerald-600/20 lg:flex-none"
-                @click="applyLocationFilter"
+                icon="i-lucide-filter"
+                class="listings-toolbar-btn flex-1 rounded-xl shadow-md shadow-emerald-600/20 sm:flex-none sm:min-w-[7rem]"
+                @click="applyFilters"
               >
                 Apply
               </AppButton>
@@ -348,11 +566,11 @@ watch(pageSize, () => {
           >
             <UTable
               v-model:column-order="columnOrder"
-              :data="listings"
+              :data="displayListings"
               :columns="columns"
               :loading="loading"
               class="min-w-0"
-              empty="No listings found."
+              empty="No listings match your filters."
             />
           </div>
         </div>
@@ -464,5 +682,9 @@ watch(pageSize, () => {
 }
 .listings-table-wrap :deep(tbody tr:last-child) {
   @apply border-b-0;
+}
+
+.listings-toolbar-btn :deep([data-slot="base"]) {
+  @apply inline-flex min-h-10 w-full items-center justify-center gap-2 px-4 py-2.5 sm:w-auto;
 }
 </style>

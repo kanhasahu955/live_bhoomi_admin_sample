@@ -5,6 +5,7 @@ import UBadge from '@nuxt/ui/components/Badge.vue'
 import UButton from '@nuxt/ui/components/Button.vue'
 import UIcon from '@nuxt/ui/components/Icon.vue'
 import { NuxtLink } from '#components'
+import AppButton from '~/components/ui/AppButton.vue'
 import { useProjectsService, useAdminService } from '~/services/api'
 import { get } from '~/utils/lodash'
 import { extractProjects, extractPaginationMeta, type PaginationMeta } from '~/utils/api-extract'
@@ -16,8 +17,11 @@ definePageMeta({
   description: 'Manage and moderate projects'
 })
 
+const ALL = '__all__'
+
 const projectsService = useProjectsService()
 const adminService = useAdminService()
+const toast = useToast()
 const {
   detectedLocation,
   detectionError,
@@ -34,15 +38,55 @@ const loading = ref(false)
 const actionLoading = ref<string | null>(null)
 const page = ref(1)
 const pageSize = ref(10)
-const locationFilter = ref('')
 const addressSuggestions = ref<{ label: string; value: string }[]>([])
 const suggestionsLoading = ref(false)
+
+const filters = ref({
+  location: '',
+  category: ALL as string,
+  projectType: ALL as string,
+  approvalStatus: ALL as string
+})
 
 const pageSizeOptions = [
   { label: '10 / page', value: 10 },
   { label: '25 / page', value: 25 },
   { label: '50 / page', value: 50 }
 ]
+
+const categoryOptions = [
+  { label: 'All categories', value: ALL },
+  { label: 'Residential', value: 'RESIDENTIAL' },
+  { label: 'Commercial', value: 'COMMERCIAL' },
+  { label: 'Industrial', value: 'INDUSTRIAL' },
+  { label: 'Land', value: 'LAND' }
+]
+
+const projectTypeOptions = [
+  { label: 'All types', value: ALL },
+  { label: 'Apartment', value: 'APARTMENT' },
+  { label: 'Villa', value: 'VILLA' },
+  { label: 'House', value: 'HOUSE' },
+  { label: 'Plot', value: 'PLOT' },
+  { label: 'Studio', value: 'STUDIO' }
+]
+
+const statusOptions = [
+  { label: 'All statuses', value: ALL },
+  { label: 'Published', value: 'PUBLISHED' },
+  { label: 'Pending', value: 'PENDING' },
+  { label: 'Rejected', value: 'REJECTED' },
+  { label: 'Draft', value: 'DRAFT' }
+]
+
+const activeFilterCount = computed(() => {
+  let n = 0
+  if (filters.value.location.trim()) n++
+  if (filters.value.category !== ALL) n++
+  if (filters.value.projectType !== ALL) n++
+  if (filters.value.approvalStatus !== ALL) n++
+  return n
+})
 
 const fetchSuggestions = useDebounceFn(async (query: string) => {
   const q = query?.trim()
@@ -52,7 +96,7 @@ const fetchSuggestions = useDebounceFn(async (query: string) => {
   }
   suggestionsLoading.value = true
   try {
-    const res = await projectsService.addressSuggestions({ q }) as unknown
+    const res = (await projectsService.addressSuggestions({ q })) as unknown
     const data = get(res, 'data') ?? res
     const list = Array.isArray(get(data, 'suggestions'))
       ? get(data, 'suggestions')
@@ -79,7 +123,10 @@ const fetchSuggestions = useDebounceFn(async (query: string) => {
   }
 }, 300)
 
-watch(locationFilter, (val) => fetchSuggestions(val))
+watch(
+  () => filters.value.location,
+  (val) => fetchSuggestions(val)
+)
 
 function formatPrice(value: unknown): string {
   const n = Number(value)
@@ -89,6 +136,22 @@ function formatPrice(value: unknown): string {
   return `₹${n.toLocaleString()}`
 }
 
+function rowMatchesFilters(row: Record<string, unknown>): boolean {
+  const f = filters.value
+  if (f.category !== ALL && String(get(row, 'category') ?? '') !== f.category) return false
+  if (f.projectType !== ALL) {
+    const pt = String(get(row, 'projectType') ?? '').toUpperCase()
+    if (pt !== f.projectType.toUpperCase()) return false
+  }
+  if (f.approvalStatus !== ALL) {
+    const st = String(get(row, 'approvalStatus') ?? get(row, 'status') ?? '')
+    if (st !== f.approvalStatus) return false
+  }
+  return true
+}
+
+const displayProjects = computed(() => projects.value.filter(rowMatchesFilters))
+
 const columns = computed(() => {
   void actionLoading.value
   return [
@@ -96,7 +159,7 @@ const columns = computed(() => {
       id: 'project',
       header: 'Project',
       size: 220,
-      cell: ({ row }) => {
+      cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
         const url = get(row.original, 'thumbnailUrl')
         const name = get(row.original, 'name') ?? 'Untitled'
         const id = get(row.original, 'id')
@@ -118,7 +181,10 @@ const columns = computed(() => {
           thumb,
           h(
             NuxtLink,
-            { to: `/projects/${id}`, class: 'font-medium text-gray-900 hover:underline dark:text-white' },
+            {
+              to: `/projects/${id}`,
+              class: 'font-medium text-emerald-700 hover:underline dark:text-emerald-400'
+            },
             () => name
           )
         ])
@@ -130,7 +196,7 @@ const columns = computed(() => {
       id: 'approvalStatus',
       header: 'Status',
       size: 110,
-      cell: ({ row }) => {
+      cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
         const status = get(row.original, 'approvalStatus') as string
         const color =
           status === 'PUBLISHED' ? 'success' : status === 'REJECTED' ? 'error' : 'neutral'
@@ -141,7 +207,7 @@ const columns = computed(() => {
       id: 'price',
       header: 'Price',
       size: 140,
-      cell: ({ row }) => {
+      cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
         const min = get(row.original, 'minPrice')
         const max = get(row.original, 'maxPrice')
         if (!min && !max) return '—'
@@ -152,14 +218,14 @@ const columns = computed(() => {
     {
       id: 'actions',
       header: 'Actions',
-      size: 160,
+      size: 180,
       meta: {
         class: {
           th: 'text-right',
           td: 'text-right'
         }
       },
-      cell: ({ row }) => {
+      cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
         const id = get(row.original, 'id') as string
         const status = get(row.original, 'approvalStatus') as string
         const isLoading = actionLoading.value === id
@@ -169,9 +235,10 @@ const columns = computed(() => {
             variant: 'soft',
             color: 'primary',
             icon: 'i-lucide-external-link',
+            label: 'View',
             to: `/projects/${id}`,
-            'aria-label': 'View',
-            class: 'rounded-lg'
+            class:
+              'min-h-9 rounded-lg px-3 font-semibold ring-1 ring-emerald-500/25 hover:bg-emerald-500/10 dark:ring-emerald-400/30'
           }),
           status !== 'PUBLISHED' &&
             h(UButton, {
@@ -179,9 +246,9 @@ const columns = computed(() => {
               variant: 'soft',
               color: 'success',
               icon: 'i-lucide-check',
+              label: 'Publish',
               loading: isLoading,
-              'aria-label': 'Publish',
-              class: 'rounded-lg',
+              class: 'min-h-9 rounded-lg',
               onClick: () => publishProject(id)
             }),
           status !== 'REJECTED' &&
@@ -190,9 +257,9 @@ const columns = computed(() => {
               variant: 'soft',
               color: 'error',
               icon: 'i-lucide-x',
+              label: 'Reject',
               loading: isLoading,
-              'aria-label': 'Reject',
-              class: 'rounded-lg',
+              class: 'min-h-9 rounded-lg',
               onClick: () => rejectProject(id)
             })
         ].filter(Boolean))
@@ -213,10 +280,19 @@ const columnOrder = ref([
 
 const searchParams = computed(() => {
   const params: Record<string, string | number> = { page: page.value, limit: pageSize.value }
-  const city = locationFilter.value.trim() || detectedLocation.value?.city
+  const city = filters.value.location.trim() || detectedLocation.value?.city
   if (city) params.city = city
   if (detectedLocation.value?.latitude) params.latitude = detectedLocation.value.latitude
   if (detectedLocation.value?.longitude) params.longitude = detectedLocation.value.longitude
+  if (filters.value.category !== ALL) params.category = filters.value.category
+  if (filters.value.projectType !== ALL) {
+    params.projectType = filters.value.projectType
+    params.type = filters.value.projectType
+  }
+  if (filters.value.approvalStatus !== ALL) {
+    params.approvalStatus = filters.value.approvalStatus
+    params.status = filters.value.approvalStatus
+  }
   return params
 })
 
@@ -255,9 +331,11 @@ async function loadProjects() {
           : null
       }
     }
-  } catch {
+  } catch (e) {
     projects.value = []
     metadata.value = null
+    const msg = e instanceof Error ? e.message : 'Failed to load projects'
+    toast.add({ title: 'Projects', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
   } finally {
     loading.value = false
   }
@@ -266,7 +344,7 @@ async function loadProjects() {
 async function detectAndFilter() {
   await detect()
   if (detectedLocation.value?.city) {
-    locationFilter.value = detectedLocation.value.city
+    filters.value.location = detectedLocation.value.city
   }
   const prev = page.value
   page.value = 1
@@ -274,11 +352,72 @@ async function detectAndFilter() {
 }
 
 function clearLocationFilter() {
-  locationFilter.value = ''
+  filters.value.location = ''
   clear()
   const prev = page.value
   page.value = 1
   if (prev === 1) loadProjects()
+}
+
+function applyFilters() {
+  const prev = page.value
+  page.value = 1
+  if (prev === 1) loadProjects()
+}
+
+function resetFilters() {
+  filters.value = {
+    location: '',
+    category: ALL,
+    projectType: ALL,
+    approvalStatus: ALL
+  }
+  clear()
+  const prev = page.value
+  page.value = 1
+  if (prev === 1) loadProjects()
+}
+
+function exportCsv() {
+  const rows = displayProjects.value
+  if (!rows.length) {
+    toast.add({ title: 'Export', description: 'No rows to export.', color: 'warning', icon: 'i-lucide-info' })
+    return
+  }
+  const escape = (v: string) => {
+    if (/[",\n]/.test(v)) return `"${v.replace(/"/g, '""')}"`
+    return v
+  }
+  const header = ['Name', 'Category', 'Type', 'Status', 'Min price', 'Max price', 'Location', 'Id']
+  const lines = [
+    header.join(','),
+    ...rows.map((r) => {
+      const name = String(get(r, 'name') ?? '')
+      const minP = get(r, 'minPrice')
+      const maxP = get(r, 'maxPrice')
+      const minStr = minP != null && minP !== '' ? formatPrice(minP) : ''
+      const maxStr = maxP != null && maxP !== '' ? formatPrice(maxP) : ''
+      const city = String(get(r, 'city') ?? '')
+      return [
+        escape(name),
+        escape(String(get(r, 'category') ?? '')),
+        escape(String(get(r, 'projectType') ?? '')),
+        escape(String(get(r, 'approvalStatus') ?? get(r, 'status') ?? '')),
+        escape(minStr),
+        escape(maxStr),
+        escape(city),
+        escape(String(get(r, 'id') ?? ''))
+      ].join(',')
+    })
+  ]
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `projects-page-${page.value}-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+  toast.add({ title: 'Exported', description: `${rows.length} row(s) downloaded.`, color: 'success', icon: 'i-lucide-download' })
 }
 
 async function publishProject(id: string) {
@@ -286,6 +425,10 @@ async function publishProject(id: string) {
   try {
     await adminService.publishProject(id)
     await loadProjects()
+    toast.add({ title: 'Published', description: 'Project is now live.', color: 'success', icon: 'i-lucide-check' })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Publish failed'
+    toast.add({ title: 'Publish failed', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
   } finally {
     actionLoading.value = null
   }
@@ -296,19 +439,26 @@ async function rejectProject(id: string) {
   try {
     await adminService.rejectProject(id)
     await loadProjects()
+    toast.add({ title: 'Rejected', description: 'Project was rejected.', color: 'neutral', icon: 'i-lucide-ban' })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Reject failed'
+    toast.add({ title: 'Reject failed', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
   } finally {
     actionLoading.value = null
   }
 }
 
-function applyLocationFilter() {
-  const prev = page.value
-  page.value = 1
-  if (prev === 1) loadProjects()
-}
-
 function refresh() {
   loadProjects()
+}
+
+function onAddProject() {
+  toast.add({
+    title: 'Add project',
+    description: 'New projects are usually created from the partner or mobile app. This button is reserved for a future admin flow.',
+    color: 'primary',
+    icon: 'i-lucide-info'
+  })
 }
 
 function goPrev() {
@@ -349,23 +499,42 @@ watch(pageSize, () => {
         <div
           class="flex flex-col gap-3 border-b border-gray-200/80 bg-gray-50/50 px-5 py-4 dark:border-gray-800/80 dark:bg-gray-900/40 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6"
         >
-          <p class="min-w-0 max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-            Browse projects, open details, or publish or reject when moderation is required.
-          </p>
-          <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+          <div class="min-w-0 max-w-2xl space-y-1">
+            <p class="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+              Browse projects, filter by location and attributes, export the current page, or publish or reject when moderation is required.
+            </p>
+            <p
+              v-if="metadata && activeFilterCount > 0"
+              class="text-xs text-emerald-700 dark:text-emerald-400"
+            >
+              {{ activeFilterCount }} filter(s) active · table also refines the current page if the API omits some params.
+            </p>
+          </div>
+          <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end">
             <AppButton
               icon="i-lucide-plus"
               size="sm"
               color="success"
-              class="w-full rounded-xl shadow-md shadow-emerald-600/20 sm:w-auto"
+              class="projects-toolbar-btn w-full justify-center rounded-xl shadow-md shadow-emerald-600/20 sm:w-auto"
+              @click="onAddProject"
             >
               Add Project
+            </AppButton>
+            <AppButton
+              icon="i-lucide-download"
+              size="sm"
+              variant="outline"
+              class="projects-toolbar-btn w-full shrink-0 justify-center rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
+              :disabled="loading || !displayProjects.length"
+              @click="exportCsv"
+            >
+              Export CSV
             </AppButton>
             <AppButton
               icon="i-lucide-refresh-cw"
               size="sm"
               variant="outline"
-              class="w-full shrink-0 rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
+              class="projects-toolbar-btn w-full shrink-0 justify-center rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
               :loading="loading"
               @click="refresh"
             >
@@ -385,16 +554,17 @@ watch(pageSize, () => {
               Filters
             </span>
             <span class="min-w-0 text-xs text-gray-500 dark:text-gray-500"
-              >Filter by city, location, or use GPS</span
+              >Location, GPS, category, type, and status. Use Apply after changes; Reset clears all.</span
             >
           </div>
-          <div class="grid min-w-0 gap-4 sm:grid-cols-1 lg:grid-cols-12 lg:items-end lg:gap-4">
-            <div class="space-y-1.5 lg:col-span-8">
+
+          <div class="grid min-w-0 gap-4 lg:grid-cols-12 lg:items-end lg:gap-4">
+            <div class="space-y-1.5 lg:col-span-4">
               <label class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
                 >Location</label
               >
               <UInputMenu
-                v-model="locationFilter"
+                v-model="filters.location"
                 :items="addressSuggestions"
                 value-key="value"
                 label-key="label"
@@ -406,7 +576,43 @@ watch(pageSize, () => {
                 icon="i-lucide-map-pin"
                 size="md"
                 class="w-full rounded-xl shadow-sm"
-                @keydown.enter="applyLocationFilter"
+                @keydown.enter="applyFilters"
+              />
+            </div>
+            <div class="space-y-1.5 lg:col-span-2">
+              <label class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+                >Category</label
+              >
+              <USelect
+                v-model="filters.category"
+                :items="categoryOptions"
+                size="md"
+                class="w-full rounded-xl"
+                :content="{ class: 'z-[9999]' }"
+              />
+            </div>
+            <div class="space-y-1.5 lg:col-span-2">
+              <label class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+                >Type</label
+              >
+              <USelect
+                v-model="filters.projectType"
+                :items="projectTypeOptions"
+                size="md"
+                class="w-full rounded-xl"
+                :content="{ class: 'z-[9999]' }"
+              />
+            </div>
+            <div class="space-y-1.5 lg:col-span-2">
+              <label class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+                >Status</label
+              >
+              <USelect
+                v-model="filters.approvalStatus"
+                :items="statusOptions"
+                size="md"
+                class="w-full rounded-xl"
+                :content="{ class: 'z-[9999]' }"
               />
             </div>
             <div class="flex flex-wrap gap-2 lg:col-span-4 lg:justify-end">
@@ -416,18 +622,18 @@ watch(pageSize, () => {
                 size="md"
                 color="success"
                 :loading="isDetecting"
-                class="flex-1 rounded-xl border-emerald-200 bg-white/90 dark:border-emerald-800 dark:bg-gray-900/50 lg:flex-none"
+                class="projects-toolbar-btn flex-1 rounded-xl border-emerald-200 bg-white/90 dark:border-emerald-800 dark:bg-gray-900/50 lg:flex-none"
                 @click="detectAndFilter"
               >
                 <UIcon name="i-lucide-navigation" class="size-3.5 shrink-0" />
                 <span>{{ isDetecting ? 'Detecting...' : 'Use my location' }}</span>
               </AppButton>
               <AppButton
-                v-if="locationFilter || hasDetected"
+                v-if="filters.location || hasDetected"
                 variant="outline"
                 size="md"
                 icon="i-lucide-x"
-                class="flex-1 rounded-xl border-gray-300 bg-white/90 dark:border-gray-600 dark:bg-gray-900/50 lg:flex-none"
+                class="projects-toolbar-btn flex-1 rounded-xl border-gray-300 bg-white/90 dark:border-gray-600 dark:bg-gray-900/50 lg:flex-none"
                 @click="clearLocationFilter"
               >
                 Clear
@@ -435,14 +641,29 @@ watch(pageSize, () => {
               <AppButton
                 color="success"
                 size="md"
-                icon="i-lucide-search"
-                class="flex-1 rounded-xl shadow-md shadow-emerald-600/20 lg:flex-none"
-                @click="applyLocationFilter"
+                icon="i-lucide-filter"
+                class="projects-toolbar-btn flex-1 rounded-xl shadow-md shadow-emerald-600/20 lg:flex-none"
+                @click="applyFilters"
               >
                 Apply
               </AppButton>
             </div>
           </div>
+
+          <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <AppButton
+              v-if="activeFilterCount > 0"
+              variant="ghost"
+              size="sm"
+              icon="i-lucide-rotate-ccw"
+              class="self-start text-gray-600 hover:text-emerald-800 dark:text-gray-400 dark:hover:text-emerald-300"
+              @click="resetFilters"
+            >
+              Reset all filters
+            </AppButton>
+            <div v-else class="hidden sm:block" />
+          </div>
+
           <p v-if="detectionError" class="mt-3 text-sm text-red-600 dark:text-red-400">
             {{ detectionError }}
           </p>
@@ -459,11 +680,11 @@ watch(pageSize, () => {
           >
             <UTable
               v-model:column-order="columnOrder"
-              :data="projects"
+              :data="displayProjects"
               :columns="columns"
               :loading="loading"
               class="min-w-0"
-              empty="No projects found."
+              empty="No projects match your filters."
             />
           </div>
         </div>
@@ -583,5 +804,9 @@ watch(pageSize, () => {
 }
 .projects-table-wrap :deep(tbody tr:last-child) {
   @apply border-b-0;
+}
+
+.projects-toolbar-btn :deep([data-slot="base"]) {
+  @apply inline-flex min-h-10 w-full items-center justify-center gap-2 px-4 py-2.5 sm:w-auto;
 }
 </style>
