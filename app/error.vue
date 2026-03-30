@@ -17,7 +17,7 @@ const handleError = () => clearError({ redirect: '/' })
       </p>
       <button
         type="button"
-        class="mt-6 inline-flex items-center justify-center rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+        class="mt-6 inline-flex items-center justify-center rounded-full bg-[#66de80] px-5 py-2.5 text-sm font-semibold text-[#0f172a] shadow-sm transition-colors hover:bg-[#52c96c] focus:outline-none focus:ring-2 focus:ring-[#66de80]/50 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
         @click="handleError"
       >
         Go home

@@ -1,19 +1,25 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { useNuxtApp } from 'nuxt/app'
-import { useProjectsService, useListingsService, useAdminService } from '~/services/api'
-import { PROJECTS, LISTINGS, ADMIN } from '~/services/api'
+import { ref, computed, onMounted } from 'vue'
 import { get } from '~/utils/lodash'
-import { extractProjects, extractListings, extractUsers, extractMetadata } from '~/utils/api-extract'
+import { bucketField, pickCreatedAt } from '~/utils/chart-buckets'
+import { useAdminAnalyticsData } from '~/composables/useAdminAnalyticsData'
+import { getFetchErrorMessage } from '~/utils/api-errors'
+import { CHART_STATIC, chartSeries, STATIC_DASHBOARD_KPIS } from '~/utils/chart-static-fallback'
+import AppChartPie from '~/components/charts/AppChartPie.vue'
+import AppChartBar from '~/components/charts/AppChartBar.vue'
+import AppChartLine from '~/components/charts/AppChartLine.vue'
+
+/** `true` = sample KPIs + static chart series (no API). `false` = live admin APIs (default). */
+const DASHBOARD_USE_STATIC_SAMPLE = false
+
+const donutRadius = ['42%', '68%'] as [string, string]
 
 definePageMeta({
   layout: 'admin',
   title: 'Dashboard'
 })
 
-const projectsService = useProjectsService()
-const listingsService = useListingsService()
-const adminService = useAdminService()
+const { fetchUsers, fetchProjects, fetchListings } = useAdminAnalyticsData()
 
 const usersCount = ref<number | null>(null)
 const projectsCount = ref<number | null>(null)
@@ -31,7 +37,9 @@ const recentListings = ref<Record<string, unknown>[]>([])
 const recentUsers = ref<Record<string, unknown>[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
-const chartsReady = ref(false)
+const usersLoadError = ref<string | null>(null)
+const projectsLoadError = ref<string | null>(null)
+const listingsLoadError = ref<string | null>(null)
 
 const greeting = computed(() => {
   const h = new Date().getHours()
@@ -46,63 +54,47 @@ const todayFormatted = computed(() => {
 
 const hasData = computed(() => usersCount.value != null || projectsCount.value != null || listingsCount.value != null)
 
-const SAMPLE_BAR_CATEGORY = [
-  { name: 'RESIDENTIAL', value: 12 },
-  { name: 'COMMERCIAL', value: 8 },
-  { name: 'MIXED_USE', value: 5 },
-  { name: 'PG_HOSTEL', value: 3 }
-]
-const SAMPLE_BAR_STATUS = [
-  { name: 'PUBLISHED', value: 15 },
-  { name: 'DRAFT', value: 8 },
-  { name: 'PENDING', value: 4 }
-]
-const SAMPLE_PIE_ROLE = [
-  { name: 'USER', value: 45 },
-  { name: 'ADMIN', value: 8 },
-  { name: 'MODERATOR', value: 5 }
-]
-const SAMPLE_PIE_STATUS = [
-  { name: 'ACTIVE', value: 52 },
-  { name: 'PENDING', value: 6 }
-]
-const SAMPLE_PIE_PURPOSE = [
-  { name: 'RENT', value: 18 },
-  { name: 'SALE', value: 12 }
-]
-const SAMPLE_LINE = (() => {
-  const now = new Date()
-  return Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
-    const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    return { name: m, value: [8, 12, 15, 10, 18, 22][i] ?? 10 }
-  })
-})()
-
+/** Chart rows: static sample mode, or live + fallback */
 const chartProjectsCategory = computed(() =>
-  projectsByCategory.value.length ? projectsByCategory.value : SAMPLE_BAR_CATEGORY
+  DASHBOARD_USE_STATIC_SAMPLE ? [...CHART_STATIC.projectsByCategory] : chartSeries(projectsByCategory.value, CHART_STATIC.projectsByCategory)
 )
 const chartProjectsStatus = computed(() =>
-  projectsByStatus.value.length ? projectsByStatus.value : SAMPLE_BAR_STATUS
+  DASHBOARD_USE_STATIC_SAMPLE ? [...CHART_STATIC.projectsByStatus] : chartSeries(projectsByStatus.value, CHART_STATIC.projectsByStatus)
 )
 const chartListingsPurpose = computed(() =>
-  listingsByPurpose.value.length ? listingsByPurpose.value : SAMPLE_PIE_PURPOSE
+  DASHBOARD_USE_STATIC_SAMPLE ? [...CHART_STATIC.listingsByPurpose] : chartSeries(listingsByPurpose.value, CHART_STATIC.listingsByPurpose)
 )
 const chartListingsStatus = computed(() =>
-  listingsByStatus.value.length ? listingsByStatus.value : SAMPLE_BAR_STATUS
+  DASHBOARD_USE_STATIC_SAMPLE ? [...CHART_STATIC.listingsByStatus] : chartSeries(listingsByStatus.value, CHART_STATIC.listingsByStatus)
 )
 const chartListingsCategory = computed(() =>
-  listingsByCategory.value.length ? listingsByCategory.value : SAMPLE_BAR_CATEGORY
+  DASHBOARD_USE_STATIC_SAMPLE ? [...CHART_STATIC.listingsByCategory] : chartSeries(listingsByCategory.value, CHART_STATIC.listingsByCategory)
 )
 const chartUsersByRole = computed(() =>
-  usersByRole.value.length ? usersByRole.value : SAMPLE_PIE_ROLE
+  DASHBOARD_USE_STATIC_SAMPLE ? [...CHART_STATIC.usersByRole] : chartSeries(usersByRole.value, CHART_STATIC.usersByRole)
 )
 const chartUsersByStatus = computed(() =>
-  usersByStatus.value.length ? usersByStatus.value : SAMPLE_PIE_STATUS
+  DASHBOARD_USE_STATIC_SAMPLE ? [...CHART_STATIC.usersByStatus] : chartSeries(usersByStatus.value, CHART_STATIC.usersByStatus)
 )
 const chartTrendData = computed(() => {
+  if (DASHBOARD_USE_STATIC_SAMPLE) return [...CHART_STATIC.activityTrend]
   const mapped = trendData.value.map((t) => ({ name: t.name, value: t.projects + t.listings }))
-  return mapped.length ? mapped : SAMPLE_LINE
+  return chartSeries(mapped, CHART_STATIC.activityTrend)
+})
+
+const chartsUsingStaticPreview = computed(() => {
+  if (DASHBOARD_USE_STATIC_SAMPLE) return true
+  if (loading.value) return false
+  return (
+    usersByRole.value.length === 0 ||
+    usersByStatus.value.length === 0 ||
+    projectsByStatus.value.length === 0 ||
+    projectsByCategory.value.length === 0 ||
+    listingsByPurpose.value.length === 0 ||
+    listingsByStatus.value.length === 0 ||
+    listingsByCategory.value.length === 0 ||
+    trendData.value.length === 0
+  )
 })
 
 const statCards = computed(() => [
@@ -133,54 +125,38 @@ const statCards = computed(() => [
 ])
 
 async function loadUsers() {
+  usersLoadError.value = null
   try {
-    const res = await adminService.listUsers({ page: 1, limit: 1 }) as unknown
-    const meta = extractMetadata(res)
-    usersCount.value = meta?.total ?? null
-    const list1 = extractUsers(res)
-    if (usersCount.value == null) usersCount.value = list1.length
-  } catch {
-    usersCount.value = null
-  }
-  try {
-    let allRes = await adminService.listUsers({ page: 1, limit: 50 }) as unknown
-    let list = extractUsers(allRes)
-    if (list.length === 0 && allRes && typeof allRes === 'object') {
-      list = extractUsers({ data: allRes })
-    }
-    if (list.length === 0 && import.meta.client) {
-      try {
-        const { $api } = useNuxtApp()
-        const raw = await $api.get(ADMIN.usersList, { params: { page: 1, limit: 50 } })
-        list = extractUsers((raw as { data?: unknown })?.data ?? raw)
-      } catch {
-        /* ignore */
-      }
-    }
+    const { total, rows: list } = await fetchUsers()
+    usersCount.value = total
     const roleCounts: Record<string, number> = {}
     const statusCounts: Record<string, number> = {}
     list.forEach((u: Record<string, unknown>) => {
-      const r = String(get(u, 'role') ?? get(u, 'userType') ?? '—')
-      if (r !== '—') roleCounts[r] = (roleCounts[r] ?? 0) + 1
-      const s = String(get(u, 'status') ?? get(u, 'accountStatus') ?? '—')
-      if (s !== '—') statusCounts[s] = (statusCounts[s] ?? 0) + 1
+      const r = bucketField(u, ['systemRole', 'system_role', 'role', 'userType', 'user_type'])
+      roleCounts[r] = (roleCounts[r] ?? 0) + 1
+      const s = bucketField(u, ['status', 'accountStatus', 'account_status'])
+      statusCounts[s] = (statusCounts[s] ?? 0) + 1
     })
     usersByRole.value = Object.entries(roleCounts).map(([name, value]) => ({ name, value }))
     usersByStatus.value = Object.entries(statusCounts).map(([name, value]) => ({ name, value }))
     recentUsers.value = list.slice(0, 5)
-  } catch {
+  } catch (e) {
+    usersLoadError.value = getFetchErrorMessage(e)
+    usersCount.value = null
     usersByRole.value = []
     usersByStatus.value = []
     recentUsers.value = []
   }
 }
 
-function groupByMonth(items: Record<string, unknown>[], dateKey: string): Record<string, number> {
+function groupByMonth(items: Record<string, unknown>[]): Record<string, number> {
   const counts: Record<string, number> = {}
   items.forEach((item) => {
-    const raw = get(item, dateKey)
+    const raw = pickCreatedAt(item)
     if (!raw) return
-    const d = new Date(String(raw))
+    const t = new Date(String(raw)).getTime()
+    if (!Number.isFinite(t)) return
+    const d = new Date(t)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     counts[key] = (counts[key] ?? 0) + 1
   })
@@ -188,54 +164,31 @@ function groupByMonth(items: Record<string, unknown>[], dateKey: string): Record
 }
 
 async function loadProjects() {
+  projectsLoadError.value = null
   try {
-    const res = await projectsService.searchPublic({ page: 1, limit: 1 }) as unknown
-    const meta = extractMetadata(res)
-    projectsCount.value = meta?.total ?? null
-    const list1 = extractProjects(res)
-    if (projectsCount.value == null) projectsCount.value = list1.length
-  } catch {
-    projectsCount.value = null
-  }
-  try {
-    let allRes = await projectsService.searchPublic({ page: 1, limit: 50 }) as unknown
-    let list = extractProjects(allRes)
-    if (list.length === 0 && allRes && typeof allRes === 'object') {
-      list = extractProjects({ data: allRes })
-    }
-    if (list.length === 0 && import.meta.client) {
-      try {
-        const { $api } = useNuxtApp()
-        const raw = await $api.get(PROJECTS.publicSearch, { params: { page: 1, limit: 50 } })
-        list = extractProjects((raw as { data?: unknown })?.data ?? raw)
-      } catch {
-        /* ignore */
-      }
-    }
+    const { total, rows: list } = await fetchProjects()
+    projectsCount.value = total
     const statusCounts: Record<string, number> = {}
     const categoryCounts: Record<string, number> = {}
     list.forEach((p: Record<string, unknown>) => {
-      const s = String(get(p, 'approvalStatus') ?? get(p, 'status') ?? 'UNKNOWN')
+      const s = bucketField(p, ['approvalStatus', 'approval_status', 'status'], 'UNKNOWN')
       statusCounts[s] = (statusCounts[s] ?? 0) + 1
-      const c = String(get(p, 'category') ?? get(p, 'projectType') ?? '—')
-      if (c !== '—') categoryCounts[c] = (categoryCounts[c] ?? 0) + 1
+      const c = bucketField(p, ['category', 'projectType', 'project_type', 'type'], 'Unknown')
+      categoryCounts[c] = (categoryCounts[c] ?? 0) + 1
     })
     projectsByStatus.value = Object.entries(statusCounts).map(([name, value]) => ({ name, value }))
     projectsByCategory.value = Object.entries(categoryCounts)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
     recentProjects.value = list.slice(0, 5)
-    const projByMonth = groupByMonth(list, 'createdAt')
-    const allMonths = new Set([...Object.keys(projByMonth)])
-    trendData.value = []
-    allMonths.forEach((m) => {
-      trendData.value.push({
-        name: m,
-        projects: projByMonth[m] ?? 0,
-        listings: 0
-      })
-    })
-  } catch {
+    const projByMonth = groupByMonth(list)
+    trendData.value = Object.entries(projByMonth)
+      .map(([name, projects]) => ({ name, projects, listings: 0 }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(-12)
+  } catch (e) {
+    projectsLoadError.value = getFetchErrorMessage(e)
+    projectsCount.value = null
     projectsByStatus.value = []
     projectsByCategory.value = []
     recentProjects.value = []
@@ -243,40 +196,20 @@ async function loadProjects() {
 }
 
 async function loadListings() {
+  listingsLoadError.value = null
   try {
-    const res = await listingsService.searchPublic({ page: 1, limit: 1 }) as unknown
-    const meta = extractMetadata(res)
-    listingsCount.value = meta?.total ?? null
-    const list1 = extractListings(res)
-    if (listingsCount.value == null) listingsCount.value = list1.length
-  } catch {
-    listingsCount.value = null
-  }
-  try {
-    let allRes = await listingsService.searchPublic({ page: 1, limit: 50 }) as unknown
-    let list = extractListings(allRes)
-    if (list.length === 0 && allRes && typeof allRes === 'object') {
-      list = extractListings({ data: allRes })
-    }
-    if (list.length === 0 && import.meta.client) {
-      try {
-        const { $api } = useNuxtApp()
-        const raw = await $api.get(LISTINGS.publicSearch, { params: { page: 1, limit: 50 } })
-        list = extractListings((raw as { data?: unknown })?.data ?? raw)
-      } catch {
-        /* ignore */
-      }
-    }
+    const { total, rows: list } = await fetchListings()
+    listingsCount.value = total
     const purposeCounts: Record<string, number> = {}
     const statusCounts: Record<string, number> = {}
     const categoryCounts: Record<string, number> = {}
     list.forEach((l: Record<string, unknown>) => {
-      const p = String(get(l, 'purpose') ?? get(l, 'purposeType') ?? get(l, 'listingPurpose') ?? 'UNKNOWN')
+      const p = bucketField(l, ['purpose', 'purposeType', 'listingPurpose', 'purpose_type'], 'UNKNOWN')
       purposeCounts[p] = (purposeCounts[p] ?? 0) + 1
-      const s = String(get(l, 'approvalStatus') ?? get(l, 'status') ?? 'UNKNOWN')
+      const s = bucketField(l, ['approvalStatus', 'approval_status', 'status'], 'UNKNOWN')
       statusCounts[s] = (statusCounts[s] ?? 0) + 1
-      const c = String(get(l, 'category') ?? get(l, 'type') ?? '—')
-      if (c !== '—') categoryCounts[c] = (categoryCounts[c] ?? 0) + 1
+      const c = bucketField(l, ['category', 'type', 'propertyType'], 'Unknown')
+      categoryCounts[c] = (categoryCounts[c] ?? 0) + 1
     })
     listingsByPurpose.value = Object.entries(purposeCounts).map(([name, value]) => ({ name, value }))
     listingsByStatus.value = Object.entries(statusCounts).map(([name, value]) => ({ name, value }))
@@ -284,15 +217,17 @@ async function loadListings() {
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
     recentListings.value = list.slice(0, 5)
-    const listByMonth = groupByMonth(list, 'createdAt')
+    const listByMonth = groupByMonth(list)
     const existing = new Map(trendData.value.map((t) => [t.name, { ...t }]))
     Object.entries(listByMonth).forEach(([m, v]) => {
       const cur = existing.get(m) ?? { name: m, projects: 0, listings: 0 }
       cur.listings = v
       existing.set(m, cur)
     })
-    trendData.value = Array.from(existing.values()).sort((a, b) => a.name.localeCompare(b.name)).slice(-6)
-  } catch {
+    trendData.value = Array.from(existing.values()).sort((a, b) => a.name.localeCompare(b.name)).slice(-12)
+  } catch (e) {
+    listingsLoadError.value = getFetchErrorMessage(e)
+    listingsCount.value = null
     listingsByPurpose.value = []
     listingsByStatus.value = []
     listingsByCategory.value = []
@@ -303,6 +238,7 @@ async function loadListings() {
 async function loadAll() {
   loading.value = true
   error.value = null
+  trendData.value = []
   try {
     await loadUsers()
     await loadProjects()
@@ -314,13 +250,35 @@ async function loadAll() {
   }
 }
 
-onMounted(async () => {
-  await loadAll()
-  await nextTick()
-  // Defer chart render so ECharts can get valid DOM dimensions (fixes "Can't get DOM width or height")
-  setTimeout(() => {
-    chartsReady.value = true
-  }, 100)
+function applyStaticSample() {
+  error.value = null
+  usersCount.value = STATIC_DASHBOARD_KPIS.users
+  projectsCount.value = STATIC_DASHBOARD_KPIS.projects
+  listingsCount.value = STATIC_DASHBOARD_KPIS.listings
+  usersByRole.value = [...CHART_STATIC.usersByRole]
+  usersByStatus.value = [...CHART_STATIC.usersByStatus]
+  projectsByStatus.value = [...CHART_STATIC.projectsByStatus]
+  projectsByCategory.value = [...CHART_STATIC.projectsByCategory]
+  listingsByPurpose.value = [...CHART_STATIC.listingsByPurpose]
+  listingsByStatus.value = [...CHART_STATIC.listingsByStatus]
+  listingsByCategory.value = [...CHART_STATIC.listingsByCategory]
+  trendData.value = CHART_STATIC.activityTrend.map((t) => ({
+    name: t.name,
+    projects: Math.round(t.value * 0.45),
+    listings: Math.round(t.value * 0.55)
+  }))
+  recentUsers.value = []
+  recentProjects.value = []
+  recentListings.value = []
+  loading.value = false
+}
+
+onMounted(() => {
+  if (DASHBOARD_USE_STATIC_SAMPLE) {
+    applyStaticSample()
+    return
+  }
+  loadAll()
 })
 </script>
 
@@ -369,6 +327,18 @@ onMounted(async () => {
       {{ error }}
     </div>
 
+    <div
+      v-if="chartsUsingStaticPreview && !loading"
+      class="mb-6 flex items-start gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-950 dark:border-cyan-400/30 dark:bg-cyan-950/40 dark:text-cyan-100"
+    >
+      <UIcon name="i-lucide-presentation" class="mt-0.5 size-5 shrink-0 text-cyan-600 dark:text-cyan-300" />
+      <p>
+        <span class="font-semibold">Sample data (ECharts):</span>
+        <span v-if="DASHBOARD_USE_STATIC_SAMPLE"> Dashboard is using static numbers so pie, bar, and line charts always render. Set <code class="rounded bg-black/10 px-1 dark:bg-white/10">DASHBOARD_USE_STATIC_SAMPLE = false</code> in <code class="rounded bg-black/10 px-1 dark:bg-white/10">index.vue</code> to load live API data.</span>
+        <span v-else> One or more API breakdowns were empty, so some charts use sample series until live data is available.</span>
+      </p>
+    </div>
+
     <!-- KPI Stat Cards -->
     <div class="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-6 sm:grid-rows-1">
       <NuxtLink
@@ -403,6 +373,18 @@ onMounted(async () => {
       </NuxtLink>
     </div>
 
+    <div
+      v-if="usersLoadError || projectsLoadError || listingsLoadError"
+      class="mb-6 rounded-xl border border-amber-200/80 bg-amber-50/95 px-4 py-3 text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-900/25 dark:text-amber-300"
+    >
+      <p class="font-medium">Some requests failed:</p>
+      <ul class="mt-1 list-inside list-disc space-y-0.5">
+        <li v-if="usersLoadError">Users: {{ usersLoadError }}</li>
+        <li v-if="projectsLoadError">Projects: {{ projectsLoadError }}</li>
+        <li v-if="listingsLoadError">Listings: {{ listingsLoadError }}</li>
+      </ul>
+    </div>
+
     <!-- Users Section -->
     <div
       v-motion
@@ -418,22 +400,38 @@ onMounted(async () => {
         <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
           <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-cyan-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-cyan-950/20 dark:to-transparent">
             <h3 class="font-semibold text-gray-900 dark:text-white">By Role</h3>
-            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">User roles from API</p>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              {{ DASHBOARD_USE_STATIC_SAMPLE ? 'Sample data' : 'User roles from API' }}
+            </p>
           </div>
-          <div v-if="chartsReady" class="flex min-h-[260px] flex-1 flex-col p-4" style="min-height: 260px;">
-            <AppChartPie :key="`urole-${chartUsersByRole.length}`" :data="chartUsersByRole" height="260px" :loading="loading" />
+          <div class="min-h-[260px] p-2">
+            <ClientOnly>
+              <AppChartPie :data="chartUsersByRole" height="260px" :loading="loading" />
+              <template #fallback>
+                <div class="flex h-[260px] w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+                  <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-cyan-500" />
+                </div>
+              </template>
+            </ClientOnly>
           </div>
-          <div v-else class="flex h-[260px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">Loading chart…</div>
         </div>
         <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
           <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-blue-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-blue-950/20 dark:to-transparent">
             <h3 class="font-semibold text-gray-900 dark:text-white">By Status</h3>
-            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">User status from API</p>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              {{ DASHBOARD_USE_STATIC_SAMPLE ? 'Sample data' : 'User status from API' }}
+            </p>
           </div>
-          <div v-if="chartsReady" class="flex min-h-[260px] flex-1 flex-col p-4" style="min-height: 260px;">
-            <AppChartPie :key="`ustatus-${chartUsersByStatus.length}`" :data="chartUsersByStatus" height="260px" :loading="loading" />
+          <div class="min-h-[260px] p-2">
+            <ClientOnly>
+              <AppChartBar :data="chartUsersByStatus" height="260px" color="#6366f1" :loading="loading" />
+              <template #fallback>
+                <div class="flex h-[260px] w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+                  <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-blue-500" />
+                </div>
+              </template>
+            </ClientOnly>
           </div>
-          <div v-else class="flex h-[260px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">Loading chart…</div>
         </div>
       </div>
     </div>
@@ -453,22 +451,38 @@ onMounted(async () => {
         <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900 lg:col-span-2">
           <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-emerald-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-emerald-950/20 dark:to-transparent">
             <h3 class="font-semibold text-gray-900 dark:text-white">By Category</h3>
-            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">From projects API</p>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              {{ DASHBOARD_USE_STATIC_SAMPLE ? 'Sample data' : 'From projects API' }}
+            </p>
           </div>
-          <div v-if="chartsReady" class="flex min-h-[260px] flex-1 flex-col p-4" style="min-height: 260px;">
-            <AppChartBar :key="`cat-${chartProjectsCategory.length}`" :data="chartProjectsCategory" height="260px" color="#10b981" :loading="loading" />
+          <div class="min-h-[260px] p-2">
+            <ClientOnly>
+              <AppChartBar :data="chartProjectsCategory" height="260px" color="#10b981" :loading="loading" />
+              <template #fallback>
+                <div class="flex h-[260px] w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+                  <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-emerald-500" />
+                </div>
+              </template>
+            </ClientOnly>
           </div>
-          <div v-else class="flex h-[260px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">Loading chart…</div>
         </div>
         <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
           <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-teal-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-teal-950/20 dark:to-transparent">
             <h3 class="font-semibold text-gray-900 dark:text-white">By Status</h3>
-            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Approval status</p>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              {{ DASHBOARD_USE_STATIC_SAMPLE ? 'Sample data' : 'Approval status' }}
+            </p>
           </div>
-          <div v-if="chartsReady" class="flex min-h-[260px] flex-1 flex-col p-4" style="min-height: 260px;">
-            <AppChartPie :key="`status-${chartProjectsStatus.length}`" :data="chartProjectsStatus" height="260px" :loading="loading" />
+          <div class="min-h-[260px] p-2">
+            <ClientOnly>
+              <AppChartPie :data="chartProjectsStatus" height="260px" :radius="donutRadius" :loading="loading" />
+              <template #fallback>
+                <div class="flex h-[260px] w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+                  <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-teal-500" />
+                </div>
+              </template>
+            </ClientOnly>
           </div>
-          <div v-else class="flex h-[260px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">Loading chart…</div>
         </div>
       </div>
     </div>
@@ -488,32 +502,56 @@ onMounted(async () => {
         <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
           <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-teal-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-teal-950/20 dark:to-transparent">
             <h3 class="font-semibold text-gray-900 dark:text-white">By Purpose</h3>
-            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Sale / Rent</p>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              {{ DASHBOARD_USE_STATIC_SAMPLE ? 'Sample data' : 'Sale / Rent' }}
+            </p>
           </div>
-          <div v-if="chartsReady" class="flex min-h-[260px] flex-1 flex-col p-4" style="min-height: 260px;">
-            <AppChartPie :key="`purpose-${chartListingsPurpose.length}`" :data="chartListingsPurpose" height="260px" :loading="loading" />
+          <div class="min-h-[260px] p-2">
+            <ClientOnly>
+              <AppChartPie :data="chartListingsPurpose" height="260px" :loading="loading" />
+              <template #fallback>
+                <div class="flex h-[260px] w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+                  <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-teal-500" />
+                </div>
+              </template>
+            </ClientOnly>
           </div>
-          <div v-else class="flex h-[260px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">Loading chart…</div>
         </div>
         <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
           <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-cyan-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-cyan-950/20 dark:to-transparent">
             <h3 class="font-semibold text-gray-900 dark:text-white">By Status</h3>
-            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Approval status</p>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              {{ DASHBOARD_USE_STATIC_SAMPLE ? 'Sample data' : 'Approval status' }}
+            </p>
           </div>
-          <div v-if="chartsReady" class="flex min-h-[260px] flex-1 flex-col p-4" style="min-height: 260px;">
-            <AppChartPie :key="`lstatus-${chartListingsStatus.length}`" :data="chartListingsStatus" height="260px" :loading="loading" />
+          <div class="min-h-[260px] p-2">
+            <ClientOnly>
+              <AppChartBar :data="chartListingsStatus" height="260px" color="#14b8a6" :loading="loading" />
+              <template #fallback>
+                <div class="flex h-[260px] w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+                  <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-cyan-500" />
+                </div>
+              </template>
+            </ClientOnly>
           </div>
-          <div v-else class="flex h-[260px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">Loading chart…</div>
         </div>
         <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
           <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-violet-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-violet-950/20 dark:to-transparent">
             <h3 class="font-semibold text-gray-900 dark:text-white">By Category</h3>
-            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Property types</p>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              {{ DASHBOARD_USE_STATIC_SAMPLE ? 'Sample data' : 'Property types' }}
+            </p>
           </div>
-          <div v-if="chartsReady" class="flex min-h-[260px] flex-1 flex-col p-4" style="min-height: 260px;">
-            <AppChartBar :key="`lcat-${chartListingsCategory.length}`" :data="chartListingsCategory" height="260px" color="#14b8a6" :loading="loading" />
+          <div class="min-h-[260px] p-2">
+            <ClientOnly>
+              <AppChartBar :data="chartListingsCategory" height="260px" color="#8b5cf6" :loading="loading" />
+              <template #fallback>
+                <div class="flex h-[260px] w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+                  <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-violet-500" />
+                </div>
+              </template>
+            </ClientOnly>
           </div>
-          <div v-else class="flex h-[260px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">Loading chart…</div>
         </div>
       </div>
     </div>
@@ -532,12 +570,20 @@ onMounted(async () => {
       <div class="dashboard-card-hover flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-md dark:border-gray-700/80 dark:bg-gray-900">
         <div class="shrink-0 border-b border-gray-100 bg-gradient-to-r from-gray-50/80 to-transparent px-5 py-4 dark:border-gray-800 dark:bg-gradient-to-r dark:from-gray-800/50 dark:to-transparent">
           <h3 class="font-semibold text-gray-900 dark:text-white">New projects & listings by month</h3>
-          <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Combined activity over time</p>
+          <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+            {{ DASHBOARD_USE_STATIC_SAMPLE ? 'Sample data' : 'Combined activity over time' }}
+          </p>
         </div>
-        <div v-if="chartsReady" class="flex min-h-[280px] flex-1 flex-col p-4" style="min-height: 280px;">
-          <AppChartLine :key="`trend-${chartTrendData.length}`" :data="chartTrendData" height="280px" color="#10b981" :loading="loading" />
+        <div class="min-h-[300px] p-2">
+          <ClientOnly>
+            <AppChartLine :data="chartTrendData" height="300px" color="#059669" :loading="loading" />
+            <template #fallback>
+              <div class="flex h-[300px] w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+                <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-emerald-500" />
+              </div>
+            </template>
+          </ClientOnly>
         </div>
-        <div v-else class="flex h-[280px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">Loading chart…</div>
       </div>
     </div>
 
@@ -620,7 +666,7 @@ onMounted(async () => {
               <UIcon name="i-lucide-users" class="size-4 text-cyan-500" />
               <span class="truncate text-sm font-medium text-gray-900 dark:text-white">{{ get(u, 'name') ?? get(u, 'email') ?? 'User' }}</span>
               <UBadge :color="get(u, 'status') === 'ACTIVE' ? 'success' : 'neutral'" size="xs">
-                {{ get(u, 'role') ?? get(u, 'status') ?? '—' }}
+                {{ get(u, 'systemRole') ?? get(u, 'role') ?? get(u, 'status') ?? '—' }}
               </UBadge>
             </NuxtLink>
             <NuxtLink
@@ -631,8 +677,13 @@ onMounted(async () => {
             >
               <UIcon name="i-lucide-folder-kanban" class="size-4 text-emerald-500" />
               <span class="truncate text-sm font-medium text-gray-900 dark:text-white">{{ get(p, 'name') ?? 'Untitled' }}</span>
-              <UBadge :color="get(p, 'approvalStatus') === 'PUBLISHED' ? 'success' : 'neutral'" size="xs">
-                {{ get(p, 'approvalStatus') ?? '—' }}
+              <UBadge
+                :color="
+                  (get(p, 'approvalStatus') ?? get(p, 'approval_status')) === 'PUBLISHED' ? 'success' : 'neutral'
+                "
+                size="xs"
+              >
+                {{ get(p, 'approvalStatus') ?? get(p, 'approval_status') ?? '—' }}
               </UBadge>
             </NuxtLink>
             <NuxtLink

@@ -144,7 +144,7 @@ const handleLogin = async () => {
         <button
           type="submit"
           :disabled="!email || !password || loading"
-          class="flex w-full items-center justify-center rounded-lg bg-green-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-gray-900"
+          class="flex w-full items-center justify-center rounded-full bg-[#66de80] px-4 py-3 text-base font-semibold text-[#0f172a] shadow-sm transition-colors hover:bg-[#52c96c] focus:outline-none focus:ring-2 focus:ring-[#66de80]/50 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-gray-900"
         >
           <span v-if="loading" class="flex items-center gap-2">
             <svg class="h-5 w-5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

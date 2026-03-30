@@ -473,7 +473,7 @@ const columns = computed(() => {
           label: 'View',
           to: `/users/${id}`,
           class:
-            '!min-h-9 !rounded-xl !px-3.5 !text-xs !font-semibold !shadow-md !shadow-emerald-600/25 !ring-2 !ring-emerald-500/30 hover:!brightness-110 dark:!ring-emerald-400/35'
+            '!min-h-8 !px-2.5 !text-xs !font-semibold !shadow-md !shadow-emerald-600/25 !ring-2 !ring-emerald-500/30 hover:!brightness-110 dark:!ring-emerald-400/35'
         }
       )
     }
@@ -652,10 +652,10 @@ watch(bump, () => {
             >
               Copy emails (this page)
             </AppButton>
-            <div class="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end sm:ml-auto">
+            <div class="flex w-full flex-wrap gap-1.5 sm:w-auto sm:justify-end sm:ml-auto">
               <AppButton
                 color="success"
-                size="md"
+                size="sm"
                 icon="i-lucide-filter"
                 class="flex-1 rounded-xl shadow-md shadow-emerald-600/20 sm:flex-none sm:min-w-[6.5rem]"
                 @click="applyFilters"
@@ -664,7 +664,7 @@ watch(bump, () => {
               </AppButton>
               <AppButton
                 variant="outline"
-                size="md"
+                size="sm"
                 icon="i-lucide-rotate-ccw"
                 class="flex-1 rounded-xl border-gray-300 bg-white/90 dark:border-gray-600 dark:bg-gray-900/50 sm:flex-none sm:min-w-[6.5rem]"
                 @click="resetFilters"
@@ -719,25 +719,25 @@ watch(bump, () => {
                 />
               </div>
               <div
-                class="flex items-center gap-1.5 rounded-xl bg-white/90 p-1 ring-1 ring-gray-200/90 dark:bg-gray-900/90 dark:ring-gray-700"
+                class="flex items-center gap-1 rounded-xl bg-white/90 p-0.5 ring-1 ring-gray-200/90 dark:bg-gray-900/90 dark:ring-gray-700"
               >
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   icon="i-lucide-chevrons-left"
                   :disabled="metadata.page <= 1 || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   aria-label="First page"
                   @click="goFirstPage"
                 />
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   icon="i-lucide-chevron-left"
                   :disabled="metadata.page <= 1 || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   @click="goPrev"
                 >
                   Prev
@@ -745,10 +745,10 @@ watch(bump, () => {
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   trailing-icon="i-lucide-chevron-right"
                   :disabled="metadata.page >= metadata.totalPages || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   @click="goNext"
                 >
                   Next
@@ -756,10 +756,10 @@ watch(bump, () => {
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   icon="i-lucide-chevrons-right"
                   :disabled="metadata.page >= metadata.totalPages || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   aria-label="Last page"
                   @click="goLastPage"
                 />

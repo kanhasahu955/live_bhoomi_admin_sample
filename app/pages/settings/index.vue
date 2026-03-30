@@ -261,7 +261,14 @@ onMounted(() => {
                 </div>
                 <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Set via NUXT_PUBLIC_API_BASE</p>
               </div>
-              <UButton variant="outline" size="sm" icon="i-lucide-refresh-cw" :loading="apiStatus === 'checking'" @click="checkApiStatus">
+              <UButton
+                variant="outline"
+                size="sm"
+                icon="i-lucide-refresh-cw"
+                class="lb-action-btn"
+                :loading="apiStatus === 'checking'"
+                @click="checkApiStatus"
+              >
                 Recheck connection
               </UButton>
             </div>
@@ -437,10 +444,10 @@ onMounted(() => {
               </div>
             </div>
             <div class="space-y-4 p-6">
-              <UButton variant="outline" icon="i-lucide-trash-2" @click="clearCache">
+              <UButton variant="outline" icon="i-lucide-trash-2" class="lb-action-btn" @click="clearCache">
                 Clear local cache
               </UButton>
-              <UButton variant="outline" icon="i-lucide-download" class="ml-2">
+              <UButton variant="outline" icon="i-lucide-download" class="lb-action-btn ml-2">
                 Export data
               </UButton>
               <p v-if="cacheCleared" class="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">

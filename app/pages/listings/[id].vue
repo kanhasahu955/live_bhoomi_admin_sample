@@ -1,15 +1,21 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useClipboard } from '@vueuse/core'
 import { useListingsService, useAdminService } from '~/services/api'
 import { get } from '~/utils/lodash'
+import { extractListings } from '~/utils/api-extract'
+import { adminModalUiCompact, adminModalUiWide } from '~/utils/admin-modal-ui'
 
 definePageMeta({
   layout: 'admin',
-  title: 'Listing Details'
+  title: 'Listing Details',
+  description: 'View, edit, and publish a listing'
 })
 
 const route = useRoute()
 const router = useRouter()
+const toast = useToast()
+const { copy } = useClipboard()
 const listingsService = useListingsService()
 const adminService = useAdminService()
 
@@ -19,11 +25,56 @@ const loading = ref(false)
 const saving = ref(false)
 const error = ref<string | null>(null)
 
+const editModalOpen = ref(false)
+const editSaving = ref(false)
+const rejectModalOpen = ref(false)
+const rejectReasonInput = ref('')
+const editForm = ref({
+  title: '',
+  description: '',
+  category: '',
+  type: '',
+  purpose: '',
+  negotiable: false,
+  isFeatured: false
+})
+
+const categoryEditOptions = [
+  { label: 'Residential', value: 'RESIDENTIAL' },
+  { label: 'Commercial', value: 'COMMERCIAL' },
+  { label: 'Industrial', value: 'INDUSTRIAL' },
+  { label: 'Land', value: 'LAND' }
+]
+
+const typeEditOptions = [
+  { label: 'Apartment', value: 'APARTMENT' },
+  { label: 'Villa', value: 'VILLA' },
+  { label: 'House', value: 'HOUSE' },
+  { label: 'Plot', value: 'PLOT' },
+  { label: 'Studio', value: 'STUDIO' }
+]
+
+const purposeEditOptions = [
+  { label: 'Sale', value: 'SALE' },
+  { label: 'Rent', value: 'RENT' }
+]
+
 function extractListing(res: unknown): Record<string, unknown> | null {
   const obj = res as Record<string, unknown>
   if (!obj) return null
   const inner = get(obj, 'data') as Record<string, unknown> | undefined
   return (inner && typeof inner === 'object' && 'id' in inner ? inner : obj) as Record<string, unknown>
+}
+
+async function findListingInAdminList(id: string): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await adminService.listAdminListings({ page: 1, limit: 500 })
+    const list = extractListings(res)
+    const item = list.find((l) => String(get(l, 'id')) === id)
+    return item ?? null
+  } catch {
+    return null
+  }
 }
 
 async function loadListing() {
@@ -34,25 +85,75 @@ async function loadListing() {
     const res = await listingsService.getById(listingId.value)
     listing.value = extractListing(res)
     if (!listing.value?.id) {
-      const listRes = await listingsService.searchPublic({ page: 1, limit: 100 }) as unknown
-      const data = get(listRes, 'data') ?? listRes
-      const list = get(data, 'listings') ?? get(listRes, 'listings') ?? []
-      const item = list.find((l) => String(get(l, 'id')) === listingId.value) as Record<string, unknown> | undefined
-      listing.value = item ?? null
+      listing.value = await findListingInAdminList(listingId.value)
     }
   } catch {
-    try {
-      const listRes = await listingsService.searchPublic({ page: 1, limit: 100 }) as unknown
-      const data = get(listRes, 'data') ?? listRes
-      const list = get(data, 'listings') ?? get(listRes, 'listings') ?? []
-      const item = list.find((l) => String(get(l, 'id')) === listingId.value) as Record<string, unknown> | undefined
-      listing.value = item ?? null
-    } catch {
+    listing.value = await findListingInAdminList(listingId.value)
+    if (!listing.value) {
       error.value = 'Failed to load listing'
-      listing.value = null
     }
   } finally {
     loading.value = false
+  }
+}
+
+function copyText(label: string, text: string) {
+  const t = text.trim()
+  if (!t) return
+  copy(t)
+  toast.add({ title: 'Copied', description: label, color: 'success', icon: 'i-lucide-copy-check' })
+}
+
+function copyPageLink() {
+  if (typeof window === 'undefined') return
+  copy(`${window.location.origin}${route.fullPath}`)
+  toast.add({ title: 'Link copied', description: 'Page link is on your clipboard.', color: 'success', icon: 'i-lucide-link' })
+}
+
+function openEditModal() {
+  const l = listing.value
+  if (!l) return
+  editForm.value = {
+    title: String(get(l, 'title') ?? get(l, 'project.name') ?? ''),
+    description: String(get(l, 'description') ?? ''),
+    category: String(get(l, 'category') ?? ''),
+    type: String(get(l, 'type') ?? get(l, 'subType') ?? ''),
+    purpose: String(get(l, 'purpose') ?? ''),
+    negotiable: Boolean(get(l, 'negotiable')),
+    isFeatured: Boolean(get(l, 'isFeatured'))
+  }
+  editModalOpen.value = true
+}
+
+async function saveListingEdits() {
+  if (!listingId.value || !listing.value) return
+  editSaving.value = true
+  error.value = null
+  try {
+    const body: Record<string, unknown> = {
+      title: editForm.value.title.trim(),
+      description: editForm.value.description.trim() || undefined,
+      category: editForm.value.category || undefined,
+      type: editForm.value.type || undefined,
+      purpose: editForm.value.purpose || undefined,
+      negotiable: editForm.value.negotiable,
+      isFeatured: editForm.value.isFeatured
+    }
+    const res = await adminService.updateListing(listingId.value, body)
+    const updated = extractListing(res)
+    if (updated && get(updated, 'id')) {
+      listing.value = { ...listing.value, ...updated }
+    } else {
+      await loadListing()
+    }
+    editModalOpen.value = false
+    toast.add({ title: 'Saved', description: 'Listing updated successfully.', color: 'success', icon: 'i-lucide-check' })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Update failed'
+    error.value = msg
+    toast.add({ title: 'Update failed', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
+  } finally {
+    editSaving.value = false
   }
 }
 
@@ -63,8 +164,41 @@ async function publishListing() {
   try {
     await adminService.publishListing(listingId.value)
     await loadListing()
-  } catch {
-    error.value = 'Failed to publish listing'
+    toast.add({ title: 'Published', description: 'This listing is now published.', color: 'success', icon: 'i-lucide-check-circle' })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Failed to publish listing'
+    error.value = msg
+    toast.add({ title: 'Publish failed', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
+  } finally {
+    saving.value = false
+  }
+}
+
+function openRejectModal() {
+  rejectReasonInput.value = ''
+  rejectModalOpen.value = true
+}
+
+async function confirmRejectListing() {
+  if (!listingId.value) return
+  saving.value = true
+  error.value = null
+  const reason = rejectReasonInput.value.trim()
+  try {
+    await adminService.rejectListing(listingId.value, reason ? { reason } : undefined)
+    rejectModalOpen.value = false
+    rejectReasonInput.value = ''
+    await loadListing()
+    toast.add({
+      title: 'Rejected',
+      description: reason ? 'Reason recorded.' : 'Listing rejected.',
+      color: 'warning',
+      icon: 'i-lucide-ban'
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Failed to reject listing'
+    error.value = msg
+    toast.add({ title: 'Reject failed', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
   } finally {
     saving.value = false
   }
@@ -144,38 +278,107 @@ function goBack() {
   router.push('/listings')
 }
 
-onMounted(loadListing)
+watch(
+  listingId,
+  () => {
+    loadListing()
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
   <div class="min-h-full min-w-0 w-full overflow-x-hidden">
-    <div class="flex flex-row flex-wrap items-center justify-between gap-4 min-w-0 overflow-hidden">
-      <div class="flex min-w-0 items-center gap-4">
-        <NuxtLink
-          to="/listings"
-          class="flex shrink-0 items-center gap-2 rounded-xl border border-gray-200/80 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all hover:border-gray-300 hover:bg-gray-50 hover:shadow-md dark:border-gray-600 dark:bg-gray-800/80 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-800"
+    <header
+      class="sticky top-0 z-30 -mx-1 mb-6 rounded-2xl border border-gray-200/70 bg-white/90 px-3 py-4 shadow-sm shadow-gray-200/40 backdrop-blur-xl dark:border-gray-700/80 dark:bg-gray-950/85 dark:shadow-none sm:-mx-2 sm:px-5 sm:py-5"
+    >
+      <div class="flex flex-col gap-5">
+        <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+          <NuxtLink
+            to="/listings"
+            class="flex w-fit shrink-0 items-center gap-2 rounded-xl border border-gray-200/90 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all hover:border-emerald-200 hover:bg-emerald-50/50 hover:text-emerald-800 dark:border-gray-600 dark:bg-gray-800/90 dark:text-gray-200 dark:hover:border-emerald-800 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-300"
+          >
+            <UIcon name="i-lucide-arrow-left" class="size-4" />
+            All listings
+          </NuxtLink>
+          <div class="min-w-0 flex-1">
+            <h1 class="text-xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-2xl">
+              {{ listing ? String(displayName) : loading ? 'Loading…' : 'Listing' }}
+            </h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Edit fields or publish when this listing is ready to go live.
+            </p>
+          </div>
+        </div>
+
+        <div
+          v-if="listing"
+          class="border-t border-gray-200/80 pt-4 dark:border-gray-700/80"
         >
-          <UIcon name="i-lucide-arrow-left" class="size-4" />
-          Back
-        </NuxtLink>
-        <AppPageHeader
-          :title="listing ? String(displayName) : 'Listing Details'"
-          description="View and manage listing details"
-        />
+          <div class="lb-detail-action-panel min-w-0">
+            <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              Actions
+            </p>
+            <div class="lb-detail-toolbar">
+              <AppButton
+                color="primary"
+                size="sm"
+                class="lb-detail-action-btn lb-detail-action-btn--primary"
+                @click="openEditModal"
+              >
+                <UIcon name="i-lucide-pencil" class="size-4 shrink-0" />
+                Edit listing
+              </AppButton>
+              <AppButton
+                v-if="get(listing, 'approvalStatus') !== 'PUBLISHED' && get(listing, 'status') !== 'PUBLISHED'"
+                variant="outline"
+                color="primary"
+                size="sm"
+                :loading="saving"
+                class="lb-detail-action-btn"
+                @click="publishListing"
+              >
+                <UIcon name="i-lucide-check" class="size-4 shrink-0" />
+                Publish
+              </AppButton>
+              <AppButton
+                v-if="get(listing, 'approvalStatus') !== 'REJECTED' && get(listing, 'status') !== 'REJECTED'"
+                variant="outline"
+                color="error"
+                size="sm"
+                :loading="saving"
+                class="lb-detail-action-btn"
+                @click="openRejectModal"
+              >
+                <UIcon name="i-lucide-x" class="size-4 shrink-0" />
+                Reject
+              </AppButton>
+              <span class="lb-detail-toolbar__divider" aria-hidden="true" />
+              <AppButton
+                variant="outline"
+                color="neutral"
+                size="sm"
+                class="lb-detail-action-btn"
+                @click="copyText('Listing ID', String(get(listing, 'id') ?? ''))"
+              >
+                <UIcon name="i-lucide-hash" class="size-4 shrink-0" />
+                Copy listing ID
+              </AppButton>
+              <AppButton
+                variant="outline"
+                color="neutral"
+                size="sm"
+                class="lb-detail-action-btn"
+                @click="copyPageLink"
+              >
+                <UIcon name="i-lucide-link" class="size-4 shrink-0" />
+                Copy page link
+              </AppButton>
+            </div>
+          </div>
+        </div>
       </div>
-      <div v-if="listing" class="flex shrink-0 flex-row flex-nowrap items-center gap-3">
-        <AppButton
-          v-if="get(listing, 'approvalStatus') !== 'PUBLISHED' && get(listing, 'status') !== 'PUBLISHED'"
-          size="sm"
-          :loading="saving"
-          class="!rounded-xl !px-4 !py-2.5 !font-semibold !shadow-md !shadow-emerald-500/25 transition-all hover:!shadow-lg hover:!shadow-emerald-500/30"
-          @click="publishListing"
-        >
-          <UIcon name="i-lucide-check-circle" class="size-4" />
-          Publish
-        </AppButton>
-      </div>
-    </div>
+    </header>
 
     <div class="mt-4">
       <Transition name="profile-notification">
@@ -211,8 +414,9 @@ onMounted(loadListing)
         <p class="text-gray-500 dark:text-gray-400">Listing not found</p>
         <AppButton
           variant="outline"
+          color="neutral"
           size="sm"
-          class="!rounded-xl !px-4 !py-2.5 !font-semibold transition-all hover:!shadow-md"
+          class="lb-detail-action-btn"
           @click="goBack"
         >
           Back to Listings
@@ -596,6 +800,162 @@ onMounted(loadListing)
           </div>
         </div>
       </template>
+
+    <UModal
+      v-model:open="editModalOpen"
+      :ui="adminModalUiWide"
+      description="Update the fields below, then save. Changes apply as soon as the save succeeds."
+    >
+      <template #title>
+        <span class="flex items-center gap-3">
+          <span
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20"
+          >
+            <UIcon name="i-lucide-pencil" class="size-[18px]" />
+          </span>
+          <span>Edit listing</span>
+        </span>
+      </template>
+      <template #body>
+        <div
+          class="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-[0_1px_0_rgba(0,0,0,0.04),0_12px_32px_-8px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.03] dark:border-gray-700/90 dark:bg-gray-900 dark:shadow-none dark:ring-white/[0.06] sm:p-6"
+        >
+          <div class="space-y-6">
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,6.5rem)_1fr] sm:items-center sm:gap-x-6">
+              <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Title</label>
+              <input
+                v-model="editForm.title"
+                type="text"
+                autocomplete="off"
+                class="w-full min-h-10 rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 transition-colors placeholder:text-gray-400 focus:border-[#66de80] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#66de80]/25 dark:border-gray-600 dark:bg-gray-950/80 dark:text-white dark:focus:border-[#66de80] dark:focus:bg-gray-900"
+              >
+            </div>
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,6.5rem)_1fr] sm:items-start sm:gap-x-6">
+              <label class="pt-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:pt-2.5">Description</label>
+              <textarea
+                v-model="editForm.description"
+                rows="4"
+                class="w-full resize-y rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-3 text-sm leading-relaxed text-gray-900 transition-colors focus:border-[#66de80] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#66de80]/25 dark:border-gray-600 dark:bg-gray-950/80 dark:text-white dark:focus:bg-gray-900"
+              />
+            </div>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-x-4">
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Category</label>
+                <select
+                  v-model="editForm.category"
+                  class="w-full min-h-10 cursor-pointer rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 transition-colors focus:border-[#66de80] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#66de80]/25 dark:border-gray-600 dark:bg-gray-950/80 dark:text-white dark:focus:bg-gray-900"
+                >
+                  <option value="">Select</option>
+                  <option v-for="opt in categoryEditOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Type</label>
+                <select
+                  v-model="editForm.type"
+                  class="w-full min-h-10 cursor-pointer rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 transition-colors focus:border-[#66de80] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#66de80]/25 dark:border-gray-600 dark:bg-gray-950/80 dark:text-white dark:focus:bg-gray-900"
+                >
+                  <option value="">Select</option>
+                  <option v-for="opt in typeEditOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Purpose</label>
+                <select
+                  v-model="editForm.purpose"
+                  class="w-full min-h-10 cursor-pointer rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 transition-colors focus:border-[#66de80] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#66de80]/25 dark:border-gray-600 dark:bg-gray-950/80 dark:text-white dark:focus:bg-gray-900"
+                >
+                  <option value="">Select</option>
+                  <option v-for="opt in purposeEditOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+              </div>
+            </div>
+            <div
+              class="rounded-xl border border-[#66de80]/20 bg-gradient-to-br from-emerald-50/80 to-white px-4 py-4 dark:border-emerald-500/20 dark:from-emerald-950/25 dark:to-gray-900/80"
+            >
+              <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-emerald-800/90 dark:text-emerald-300/90">Options</p>
+              <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-8">
+                <label class="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-gray-800 dark:text-gray-200">
+                  <input v-model="editForm.negotiable" type="checkbox" class="size-4 rounded border-gray-300 text-[#66de80] focus:ring-[#66de80]">
+                  Price negotiable
+                </label>
+                <label class="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-gray-800 dark:text-gray-200">
+                  <input v-model="editForm.isFeatured" type="checkbox" class="size-4 rounded border-gray-300 text-[#66de80] focus:ring-[#66de80]">
+                  Featured listing
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template #footer="{ close }">
+        <div class="admin-btn-modal-footer">
+          <AppButton
+            variant="outline"
+            color="neutral"
+            size="sm"
+            class="lb-modal-btn-cancel"
+            :disabled="editSaving"
+            @click="close()"
+          >
+            Cancel
+          </AppButton>
+          <AppButton
+            color="primary"
+            size="sm"
+            icon="i-lucide-check"
+            class="lb-modal-btn-submit-wide"
+            :loading="editSaving"
+            :disabled="!editForm.title.trim()"
+            @click="saveListingEdits"
+          >
+            Save changes
+          </AppButton>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal v-model:open="rejectModalOpen" title="Reject listing" :ui="adminModalUiCompact">
+      <template #body>
+        <div class="space-y-4">
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            The lister may see an optional reason you add below.
+          </p>
+          <div class="space-y-2">
+            <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Reason (optional)</label>
+            <textarea
+              v-model="rejectReasonInput"
+              rows="3"
+              placeholder="e.g. Incomplete documentation"
+              class="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-inner placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
+            />
+          </div>
+        </div>
+      </template>
+      <template #footer="{ close }">
+        <div class="admin-btn-modal-footer">
+          <AppButton
+            variant="outline"
+            color="neutral"
+            size="sm"
+            class="lb-modal-btn-cancel"
+            :disabled="saving"
+            @click="close()"
+          >
+            Cancel
+          </AppButton>
+          <AppButton
+            color="error"
+            size="sm"
+            class="lb-modal-btn-submit"
+            :loading="saving"
+            @click="confirmRejectListing"
+          >
+            Confirm rejection
+          </AppButton>
+        </div>
+      </template>
+    </UModal>
     </div>
   </div>
 </template>

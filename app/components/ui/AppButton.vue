@@ -14,7 +14,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   color: 'primary',
   variant: 'solid',
-  size: 'md',
+  size: 'sm',
   block: false,
   loading: false,
   disabled: false
@@ -24,6 +24,10 @@ const props = withDefaults(defineProps<Props>(), {
 <template>
   <UButton
     v-bind="$attrs"
+    class="lb-action-btn"
+    data-lb-btn
+    :data-lb-variant="props.variant"
+    :data-lb-color="props.color"
     :color="props.color"
     :variant="props.variant"
     :size="props.size"

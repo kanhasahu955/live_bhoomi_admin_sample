@@ -24,6 +24,8 @@ export function extractProjects(res: unknown): Record<string, unknown>[] {
     get(res, 'data.projects') ??
     get(res, 'data.items') ??
     get(res, 'data.results') ??
+    get(res, 'data.list') ??
+    get(res, 'list') ??
     get(res, 'data') ??
     get(res, 'items') ??
     get(res, 'results') ??
@@ -39,6 +41,8 @@ export function extractListings(res: unknown): Record<string, unknown>[] {
     get(res, 'listings') ??
     get(res, 'data.listings') ??
     get(res, 'data.data.listings') ??
+    get(res, 'data.list') ??
+    get(res, 'list') ??
     (Array.isArray(get(res, 'data')) ? get(res, 'data') : null)
   if (Array.isArray(raw)) {
     return raw.filter((x): x is Record<string, unknown> => x != null && typeof x === 'object')
@@ -64,9 +68,11 @@ export function extractUsers(res: unknown): Record<string, unknown>[] {
     (Array.isArray(data) ? data : null) ??
     get(data, 'users') ??
     get(data, 'items') ??
+    get(data, 'list') ??
     get(data, 'results') ??
     get(data, 'records') ??
     get(res, 'users') ??
+    get(res, 'list') ??
     (Array.isArray(res) ? res : null)
   const arr = Array.isArray(raw) ? raw : toArray(raw)
   return arr ?? []
@@ -103,6 +109,50 @@ export interface PaginationMeta {
   page: number
   limit: number
   totalPages: number
+}
+
+/**
+ * When named keys (users, projects, listings) are missing, find the largest array of
+ * plain objects in the JSON tree — picks the best-scoring candidate (length + id/email heuristics).
+ */
+export function extractLargestObjectArray(root: unknown, maxDepth = 10): Record<string, unknown>[] {
+  let best: Record<string, unknown>[] = []
+  let bestScore = -1
+
+  function score(arr: Record<string, unknown>[]): number {
+    if (!arr.length) return -1
+    const sample = arr[0]
+    let extra = 0
+    if (sample && typeof sample === 'object') {
+      if ('id' in sample) extra += 50
+      if ('email' in sample) extra += 30
+      if ('name' in sample || 'title' in sample) extra += 20
+    }
+    return arr.length * 5 + extra
+  }
+
+  function walk(node: unknown, depth: number) {
+    if (depth > maxDepth || node == null) return
+    if (Array.isArray(node)) {
+      const plain = node.filter(
+        (x): x is Record<string, unknown> =>
+          x != null && typeof x === 'object' && !Array.isArray(x)
+      )
+      const sc = score(plain)
+      if (plain.length > 0 && sc > bestScore) {
+        best = plain
+        bestScore = sc
+      }
+      for (const el of node) walk(el, depth + 1)
+      return
+    }
+    if (typeof node === 'object') {
+      for (const v of Object.values(node as Record<string, unknown>)) walk(v, depth + 1)
+    }
+  }
+
+  walk(root, 0)
+  return best
 }
 
 export function extractPaginationMeta(

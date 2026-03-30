@@ -5,9 +5,10 @@ import UButton from '@nuxt/ui/components/Button.vue'
 import UIcon from '@nuxt/ui/components/Icon.vue'
 import { NuxtLink } from '#components'
 import AppButton from '~/components/ui/AppButton.vue'
-import { useListingsService, useAdminService } from '~/services/api'
+import { useAdminService } from '~/services/api'
 import { get } from '~/utils/lodash'
-import { extractPaginationMeta, type PaginationMeta } from '~/utils/api-extract'
+import { extractListings, extractPaginationMeta, type PaginationMeta } from '~/utils/api-extract'
+import { adminModalUiCompact } from '~/utils/admin-modal-ui'
 
 definePageMeta({
   layout: 'admin',
@@ -17,7 +18,6 @@ definePageMeta({
 
 const ALL = '__all__'
 
-const listingsService = useListingsService()
 const adminService = useAdminService()
 const toast = useToast()
 
@@ -186,7 +186,7 @@ const columns = computed(() => {
     {
       id: 'actions',
       header: 'Actions',
-      size: 160,
+      size: 180,
       meta: {
         class: {
           th: 'text-right',
@@ -197,7 +197,7 @@ const columns = computed(() => {
         const id = get(row.original, 'id') as string
         const status = get(row.original, 'approvalStatus') ?? get(row.original, 'status') as string
         const isLoading = actionLoading.value === id
-        return h('div', { class: 'flex flex-nowrap items-center justify-end gap-2' }, [
+        return h('div', { class: 'flex flex-nowrap items-center justify-end gap-1' }, [
           h(UButton, {
             size: 'sm',
             variant: 'soft',
@@ -205,8 +205,7 @@ const columns = computed(() => {
             icon: 'i-lucide-external-link',
             label: 'View',
             to: `/listings/${id}`,
-            class:
-              'min-h-9 rounded-lg px-3 font-semibold ring-1 ring-emerald-500/25 hover:bg-emerald-500/10 dark:ring-emerald-400/30'
+            class: 'admin-btn-table lb-action-btn'
           }),
           status !== 'PUBLISHED' &&
             h(UButton, {
@@ -216,8 +215,19 @@ const columns = computed(() => {
               icon: 'i-lucide-check',
               label: 'Publish',
               loading: isLoading,
-              class: 'min-h-9 rounded-lg',
+              class: 'admin-btn-table lb-action-btn',
               onClick: () => publishListing(id)
+            }),
+          status !== 'REJECTED' &&
+            h(UButton, {
+              size: 'sm',
+              variant: 'soft',
+              color: 'error',
+              icon: 'i-lucide-x',
+              label: 'Reject',
+              loading: isLoading,
+              class: 'admin-btn-table lb-action-btn',
+              onClick: () => openRejectModal(id)
             })
         ].filter(Boolean))
       }
@@ -253,14 +263,14 @@ const searchParams = computed(() => {
 async function loadListings() {
   loading.value = true
   try {
-    const res = (await listingsService.searchPublic(searchParams.value)) as unknown
-    const data = get(res, 'data') ?? res
-    listings.value = (get(data, 'listings') ?? get(res, 'listings') ?? []) as Record<string, unknown>[]
+    const res = (await adminService.listAdminListings(searchParams.value)) as unknown
+    listings.value = extractListings(res)
 
     const meta = extractPaginationMeta(res as object, page.value, pageSize.value)
     if (meta) {
       metadata.value = meta
     } else {
+      const data = get(res, 'data') ?? res
       const m = get(data, 'metadata') ?? get(res, 'metadata')
       if (m && typeof m === 'object') {
         const total = Number((m as { total?: number }).total)
@@ -304,6 +314,41 @@ async function publishListing(id: string) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Publish failed'
     toast.add({ title: 'Publish failed', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
+  } finally {
+    actionLoading.value = null
+  }
+}
+
+const rejectModalOpen = ref(false)
+const pendingRejectId = ref<string | null>(null)
+const rejectReasonInput = ref('')
+
+function openRejectModal(id: string) {
+  pendingRejectId.value = id
+  rejectReasonInput.value = ''
+  rejectModalOpen.value = true
+}
+
+async function confirmRejectListing() {
+  const id = pendingRejectId.value
+  if (!id) return
+  actionLoading.value = id
+  try {
+    const reason = rejectReasonInput.value.trim()
+    await adminService.rejectListing(id, reason ? { reason } : undefined)
+    rejectModalOpen.value = false
+    pendingRejectId.value = null
+    rejectReasonInput.value = ''
+    await loadListings()
+    toast.add({
+      title: 'Rejected',
+      description: reason ? 'Reason recorded.' : 'Listing was rejected.',
+      color: 'warning',
+      icon: 'i-lucide-ban'
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Reject failed'
+    toast.add({ title: 'Reject failed', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
   } finally {
     actionLoading.value = null
   }
@@ -422,21 +467,21 @@ watch(pageSize, () => {
         >
           <div class="min-w-0 max-w-2xl space-y-1">
             <p class="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-              Browse listings, filter by location and attributes, export the current page, or publish when moderation is required.
+              Filter, export, and publish listings from the admin list. Apply after changing filters; the table can further narrow the current page when needed.
             </p>
             <p
               v-if="metadata && activeFilterCount > 0"
               class="text-xs text-emerald-700 dark:text-emerald-400"
             >
-              {{ activeFilterCount }} filter(s) active · table also refines the current page if the API omits some params.
+              {{ activeFilterCount }} filter(s) active
             </p>
           </div>
-          <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end">
+          <div class="flex w-full flex-col gap-1.5 sm:w-auto sm:flex-row sm:justify-end">
             <AppButton
               icon="i-lucide-plus"
               size="sm"
               color="success"
-              class="listings-toolbar-btn w-full justify-center rounded-xl shadow-md shadow-emerald-600/20 sm:w-auto"
+              class="admin-btn-page admin-btn-page-fluid"
               @click="onAddListing"
             >
               Add Listing
@@ -445,7 +490,8 @@ watch(pageSize, () => {
               icon="i-lucide-download"
               size="sm"
               variant="outline"
-              class="listings-toolbar-btn w-full shrink-0 justify-center rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
+              color="neutral"
+              class="admin-btn-page admin-btn-page-fluid"
               :disabled="loading || !displayListings.length"
               @click="exportCsv"
             >
@@ -455,7 +501,8 @@ watch(pageSize, () => {
               icon="i-lucide-refresh-cw"
               size="sm"
               variant="outline"
-              class="listings-toolbar-btn w-full shrink-0 justify-center rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
+              color="neutral"
+              class="admin-btn-page admin-btn-page-fluid"
               :loading="loading"
               @click="refresh"
             >
@@ -544,12 +591,12 @@ watch(pageSize, () => {
             </AppButton>
             <div v-else class="hidden sm:block" />
 
-            <div class="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+            <div class="flex w-full flex-wrap gap-1.5 sm:w-auto sm:justify-end">
               <AppButton
                 color="success"
-                size="md"
+                size="sm"
                 icon="i-lucide-filter"
-                class="listings-toolbar-btn flex-1 rounded-xl shadow-md shadow-emerald-600/20 sm:flex-none sm:min-w-[7rem]"
+                class="admin-btn-page flex-1 sm:flex-none sm:min-w-[7rem]"
                 @click="applyFilters"
               >
                 Apply
@@ -601,24 +648,24 @@ watch(pageSize, () => {
                   :content="{ class: 'z-[9999]' }"
                 />
               </div>
-              <div class="flex items-center gap-1.5 rounded-xl bg-white/90 p-1 ring-1 ring-gray-200/90 dark:bg-gray-900/90 dark:ring-gray-700">
+              <div class="flex items-center gap-1 rounded-xl bg-white/90 p-0.5 ring-1 ring-gray-200/90 dark:bg-gray-900/90 dark:ring-gray-700">
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   icon="i-lucide-chevrons-left"
                   :disabled="metadata.page <= 1 || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   aria-label="First page"
                   @click="goFirstPage"
                 />
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   icon="i-lucide-chevron-left"
                   :disabled="metadata.page <= 1 || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   @click="goPrev"
                 >
                   Prev
@@ -626,10 +673,10 @@ watch(pageSize, () => {
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   trailing-icon="i-lucide-chevron-right"
                   :disabled="metadata.page >= metadata.totalPages || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   @click="goNext"
                 >
                   Next
@@ -637,10 +684,10 @@ watch(pageSize, () => {
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   icon="i-lucide-chevrons-right"
                   :disabled="metadata.page >= metadata.totalPages || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   aria-label="Last page"
                   @click="goLastPage"
                 />
@@ -650,6 +697,49 @@ watch(pageSize, () => {
         </div>
       </div>
     </div>
+
+    <UModal v-model:open="rejectModalOpen" title="Reject listing" :ui="adminModalUiCompact">
+      <template #body>
+        <div class="space-y-4">
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            The lister may see an optional reason you add below.
+          </p>
+          <div class="space-y-2">
+            <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Reason (optional)</label>
+            <textarea
+              v-model="rejectReasonInput"
+              rows="3"
+              placeholder="e.g. Incomplete documentation"
+              class="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-inner placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
+            />
+          </div>
+        </div>
+      </template>
+      <template #footer="{ close }">
+        <div class="admin-btn-modal-footer">
+          <AppButton
+            variant="outline"
+            color="neutral"
+            size="sm"
+            class="lb-modal-btn-cancel"
+            :disabled="!!actionLoading"
+            @click="close()"
+          >
+            Cancel
+          </AppButton>
+          <AppButton
+            color="error"
+            size="sm"
+            class="lb-modal-btn-submit"
+            :loading="!!actionLoading"
+            :disabled="!pendingRejectId"
+            @click="confirmRejectListing"
+          >
+            Confirm rejection
+          </AppButton>
+        </div>
+      </template>
+    </UModal>
   </AppStack>
 </template>
 
@@ -683,8 +773,13 @@ watch(pageSize, () => {
 .listings-table-wrap :deep(tbody tr:last-child) {
   @apply border-b-0;
 }
-
-.listings-toolbar-btn :deep([data-slot="base"]) {
-  @apply inline-flex min-h-10 w-full items-center justify-center gap-2 px-4 py-2.5 sm:w-auto;
+.listings-table-wrap :deep(tbody td:last-child) {
+  overflow: visible;
+  min-width: 10rem;
+}
+@media (min-width: 1024px) {
+  .listings-table-wrap :deep(tbody td:last-child) {
+    min-width: 11rem;
+  }
 }
 </style>

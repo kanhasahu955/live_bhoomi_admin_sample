@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 import { useUserService, normalizeAuthUser } from '~/services/api'
+import { adminModalUiCompact } from '~/utils/admin-modal-ui'
 
 definePageMeta({
   layout: 'admin',
@@ -412,7 +413,7 @@ onMounted(loadProfile)
               <div class="mt-4 flex justify-end">
                 <AppButton
                   :loading="saving"
-                  size="md"
+                  size="sm"
                   color="success"
                   icon="i-lucide-check"
                   label="Save changes"
@@ -472,7 +473,7 @@ onMounted(loadProfile)
               <div class="mt-4 flex justify-end">
                 <AppButton
                   :loading="passwordSaving"
-                  size="md"
+                  size="sm"
                   variant="outline"
                   color="success"
                   icon="i-lucide-key-round"
@@ -504,7 +505,7 @@ onMounted(loadProfile)
               <div class="flex justify-end">
                 <AppButton
                   :loading="deleteLoading"
-                  size="md"
+                  size="sm"
                   variant="outline"
                   color="error"
                   icon="i-lucide-trash-2"
@@ -654,24 +655,27 @@ onMounted(loadProfile)
     </div>
 
     <!-- Delete account confirmation modal -->
-    <UModal v-model:open="showDeleteModal" title="Delete account">
+    <UModal v-model:open="showDeleteModal" title="Delete account" :ui="adminModalUiCompact">
       <template #body>
         <p class="text-sm text-gray-600 dark:text-gray-400">
           Are you sure you want to delete your account? This action cannot be undone.
         </p>
       </template>
       <template #footer="{ close }">
-        <div class="flex w-full flex-wrap justify-end gap-2">
-          <AppButton variant="outline" size="md" label="Cancel" class="min-h-10" @click="close()" />
+        <div class="admin-btn-modal-footer">
+          <AppButton variant="outline" color="neutral" size="sm" class="lb-modal-btn-cancel" @click="close()">
+            Cancel
+          </AppButton>
           <AppButton
             :loading="deleteLoading"
             color="error"
-            size="md"
+            size="sm"
             icon="i-lucide-trash-2"
-            label="Delete account"
-            class="min-h-10"
+            class="lb-modal-btn-submit"
             @click="deleteAccount"
-          />
+          >
+            Delete account
+          </AppButton>
         </div>
       </template>
     </UModal>

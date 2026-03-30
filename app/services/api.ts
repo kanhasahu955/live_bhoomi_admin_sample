@@ -20,14 +20,20 @@ export const AUTH = {
 
 export const ADMIN = {
   profiles: '/admin/profiles',
+  profileById: (id: string) => `/admin/profiles/${id}`,
   profileApprove: (id: string) => `/admin/profiles/${id}/approve`,
   profileReject: (id: string) => `/admin/profiles/${id}/reject`,
+  projects: '/admin/projects',
+  projectAdmin: (id: string) => `/admin/projects/${id}`,
   projectPublish: (id: string) => `/admin/projects/${id}/publish`,
   projectReject: (id: string) => `/admin/projects/${id}/reject`,
   usersList: '/admin/users/list',
   userStatus: (id: string) => `/admin/users/${id}/status`,
   userRole: (id: string) => `/admin/users/${id}/role`,
+  listings: '/admin/listings',
+  listingAdmin: (id: string) => `/admin/listings/${id}`,
   listingPublish: (id: string) => `/admin/listings/${id}/publish`,
+  listingReject: (id: string) => `/admin/listings/${id}/reject`,
 } as const
 
 export const OTP = { sendEmail: '/otp/send-email', resendEmail: '/otp/resend-email', verify: '/otp/verify' } as const
@@ -143,14 +149,32 @@ export class AuthService extends BaseService {
 export class AdminService extends BaseService {
   constructor(api: IApiClient) { super(api) }
   listProfiles(params?: Record<string, string | number>) { return this.api.get(ADMIN.profiles, params) }
+  updateProfile(profileId: string, body: Record<string, unknown>) {
+    return this.api.patch<ApiResponse<unknown>>(ADMIN.profileById(profileId), body)
+  }
   approveProfile(profileId: string) { return this.api.patch<ApiResponse<unknown>>(ADMIN.profileApprove(profileId)) }
   rejectProfile(profileId: string, body?: { reason?: string }) { return this.api.patch(ADMIN.profileReject(profileId), body) }
+  listAdminProjects(params?: Record<string, string | number>) {
+    return this.api.get(ADMIN.projects, params)
+  }
+  updateProject(projectId: string, body: Record<string, unknown>) {
+    return this.api.patch<ApiResponse<unknown>>(ADMIN.projectAdmin(projectId), body)
+  }
   publishProject(projectId: string) { return this.api.patch(ADMIN.projectPublish(projectId)) }
   rejectProject(projectId: string, body?: { reason?: string }) { return this.api.patch(ADMIN.projectReject(projectId), body) }
   listUsers(params?: Record<string, string | number>) { return this.api.get(ADMIN.usersList, params) }
   updateUserStatus(userId: string, body: { status: string }) { return this.api.patch(ADMIN.userStatus(userId), body) }
   updateUserRole(userId: string, body: { role: string }) { return this.api.patch(ADMIN.userRole(userId), body) }
+  listAdminListings(params?: Record<string, string | number>) {
+    return this.api.get(ADMIN.listings, params)
+  }
+  updateListing(listingId: string, body: Record<string, unknown>) {
+    return this.api.patch<ApiResponse<unknown>>(ADMIN.listingAdmin(listingId), body)
+  }
   publishListing(listingId: string) { return this.api.patch(ADMIN.listingPublish(listingId)) }
+  rejectListing(listingId: string, body?: { reason?: string }) {
+    return this.api.patch(ADMIN.listingReject(listingId), body)
+  }
 }
 
 export class UserService extends BaseService {

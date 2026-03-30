@@ -15,6 +15,7 @@ import { useAuthStore } from '~/stores/auth'
 import { useAdminUsersListRefresh } from '~/composables/useAdminUsersListRefresh'
 import { get } from '~/utils/lodash'
 import { extractUsers } from '~/utils/api-extract'
+import { adminModalUiStacked } from '~/utils/admin-modal-ui'
 
 definePageMeta({
   layout: 'admin',
@@ -91,6 +92,7 @@ const statusOptions = [
 ]
 
 const showRefreshConfirm = ref(false)
+const userDetailSavedModalUi = adminModalUiStacked()
 
 /** Flatten nested API shapes: { user }, { data }, { data: { user } }, JSON:API { attributes }. */
 function pickRecord(raw: unknown): Record<string, unknown> {
@@ -918,7 +920,7 @@ watch(isSuperAdminUser, (sup) => {
                 <div class="flex flex-wrap gap-2 pt-1">
                   <AppButton
                     color="success"
-                    size="md"
+                    size="sm"
                     icon="i-lucide-save"
                     class="user-detail-toolbar-btn flex-1 rounded-xl shadow-md shadow-emerald-600/25 sm:flex-none"
                     :loading="saving"
@@ -929,7 +931,7 @@ watch(isSuperAdminUser, (sup) => {
                   </AppButton>
                   <AppButton
                     variant="outline"
-                    size="md"
+                    size="sm"
                     icon="i-lucide-rotate-ccw"
                     class="user-detail-toolbar-btn rounded-xl border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900/80"
                     :disabled="saving || !hasAdminChanges"
@@ -1021,7 +1023,7 @@ watch(isSuperAdminUser, (sup) => {
       <UIcon name="i-lucide-user-x" class="mx-auto h-14 w-14 text-gray-400" />
       <p class="mt-4 text-base font-medium text-gray-800 dark:text-gray-200">User not found</p>
       <p class="mt-1 text-sm text-gray-500 dark:text-gray-500">Check the link or return to the directory.</p>
-      <AppButton variant="outline" size="md" class="mt-8 rounded-xl" @click="goBack">
+      <AppButton variant="outline" size="sm" class="mt-8" @click="goBack">
         Back to users
       </AppButton>
     </div>
@@ -1030,13 +1032,7 @@ watch(isSuperAdminUser, (sup) => {
       v-model:open="showRefreshConfirm"
       :portal="false"
       title="Changes saved"
-      :ui="{
-        content: 'z-[100] max-w-[92vw] sm:max-w-md',
-        overlay: 'z-[90]',
-        header: 'border-b border-gray-200/80 px-5 py-4 dark:border-gray-800',
-        body: 'px-5 py-5 sm:px-6 sm:py-6',
-        footer: 'border-t border-gray-100 px-5 py-4 dark:border-gray-800'
-      }"
+      :ui="userDetailSavedModalUi"
     >
       <template #body>
         <p class="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
@@ -1044,12 +1040,12 @@ watch(isSuperAdminUser, (sup) => {
         </p>
       </template>
       <template #footer="{ close }">
-        <div class="flex w-full flex-wrap justify-end gap-2">
+        <div class="admin-btn-modal-footer admin-btn-modal-footer--single">
           <AppButton
             color="success"
-            size="md"
+            size="sm"
             icon="i-lucide-check"
-            class="min-h-10 rounded-xl"
+            class="lb-modal-btn-submit"
             @click="closeSaveSuccessModal(close)"
           >
             OK
@@ -1064,6 +1060,6 @@ watch(isSuperAdminUser, (sup) => {
 @reference "../../assets/css/main.css";
 
 .user-detail-toolbar-btn :deep([data-slot="base"]) {
-  @apply inline-flex min-h-10 w-full items-center justify-center gap-2 px-4 py-2.5 sm:w-auto;
+  @apply inline-flex min-h-9 w-full items-center justify-center gap-1.5 px-3 py-2 text-sm sm:w-auto;
 }
 </style>

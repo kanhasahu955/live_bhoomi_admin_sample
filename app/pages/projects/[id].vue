@@ -1,15 +1,21 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useClipboard } from '@vueuse/core'
 import { useProjectsService, useAdminService } from '~/services/api'
 import { get } from '~/utils/lodash'
+import { extractProjects } from '~/utils/api-extract'
+import { adminModalUiCompact, adminModalUiWide } from '~/utils/admin-modal-ui'
 
 definePageMeta({
   layout: 'admin',
-  title: 'Project Details'
+  title: 'Project Details',
+  description: 'View and manage a project'
 })
 
 const route = useRoute()
 const router = useRouter()
+const toast = useToast()
+const { copy } = useClipboard()
 const projectsService = useProjectsService()
 const adminService = useAdminService()
 
@@ -18,6 +24,35 @@ const project = ref<Record<string, unknown> | null>(null)
 const loading = ref(false)
 const saving = ref(false)
 const error = ref<string | null>(null)
+
+const rejectModalOpen = ref(false)
+const rejectReasonInput = ref('')
+const editModalOpen = ref(false)
+const editSaving = ref(false)
+
+const editForm = ref({
+  name: '',
+  description: '',
+  category: '',
+  projectType: '',
+  isFeatured: false,
+  isVerified: false
+})
+
+const categoryEditOptions = [
+  { label: 'Residential', value: 'RESIDENTIAL' },
+  { label: 'Commercial', value: 'COMMERCIAL' },
+  { label: 'Industrial', value: 'INDUSTRIAL' },
+  { label: 'Land', value: 'LAND' }
+]
+
+const projectTypeEditOptions = [
+  { label: 'Apartment', value: 'APARTMENT' },
+  { label: 'Villa', value: 'VILLA' },
+  { label: 'House', value: 'HOUSE' },
+  { label: 'Plot', value: 'PLOT' },
+  { label: 'Studio', value: 'STUDIO' }
+]
 
 const staggerDelays = [0, 80, 160, 240, 320, 400]
 
@@ -28,6 +63,17 @@ function extractProject(res: unknown): Record<string, unknown> | null {
   return (inner && typeof inner === 'object' && 'id' in inner ? inner : obj) as Record<string, unknown>
 }
 
+async function findProjectInAdminList(id: string): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await adminService.listAdminProjects({ page: 1, limit: 500 })
+    const list = extractProjects(res)
+    const item = list.find((p) => String(get(p, 'id')) === id)
+    return item ?? null
+  } catch {
+    return null
+  }
+}
+
 async function loadProject() {
   if (!projectId.value) return
   loading.value = true
@@ -36,23 +82,83 @@ async function loadProject() {
     const res = await projectsService.getById(projectId.value)
     project.value = extractProject(res)
     if (!project.value?.id) {
-      const listRes = await projectsService.searchPublic({ page: 1, limit: 100 }) as { projects?: Record<string, unknown>[] }
-      const list = get(listRes, 'projects') ?? []
-      const item = list.find((p) => String(get(p, 'id')) === projectId.value) as Record<string, unknown> | undefined
-      project.value = item ?? null
+      project.value = await findProjectInAdminList(projectId.value)
     }
   } catch {
-    try {
-      const listRes = await projectsService.searchPublic({ page: 1, limit: 100 }) as { projects?: Record<string, unknown>[] }
-      const list = get(listRes, 'projects') ?? []
-      const item = list.find((p) => String(get(p, 'id')) === projectId.value) as Record<string, unknown> | undefined
-      project.value = item ?? null
-    } catch {
+    project.value = await findProjectInAdminList(projectId.value)
+    if (!project.value) {
       error.value = 'Failed to load project'
-      project.value = null
     }
   } finally {
     loading.value = false
+  }
+}
+
+function copyText(label: string, text: string) {
+  const t = text.trim()
+  if (!t) return
+  copy(t)
+  toast.add({ title: 'Copied', description: label, color: 'success', icon: 'i-lucide-copy-check' })
+}
+
+function copyProjectPageLink() {
+  if (typeof window === 'undefined') return
+  copy(`${window.location.origin}${route.fullPath}`)
+  toast.add({
+    title: 'Link copied',
+    description: 'Page link is on your clipboard.',
+    color: 'success',
+    icon: 'i-lucide-link'
+  })
+}
+
+function openEditModal() {
+  const p = project.value
+  if (!p) return
+  editForm.value = {
+    name: String(get(p, 'name') ?? ''),
+    description: String(get(p, 'description') ?? ''),
+    category: String(get(p, 'category') ?? ''),
+    projectType: String(get(p, 'projectType') ?? ''),
+    isFeatured: Boolean(get(p, 'isFeatured')),
+    isVerified: Boolean(get(p, 'isVerified'))
+  }
+  editModalOpen.value = true
+}
+
+async function saveProjectEdits() {
+  if (!projectId.value || !project.value) return
+  editSaving.value = true
+  error.value = null
+  try {
+    const body: Record<string, unknown> = {
+      name: editForm.value.name.trim(),
+      description: editForm.value.description.trim() || undefined,
+      category: editForm.value.category || undefined,
+      projectType: editForm.value.projectType || undefined,
+      isFeatured: editForm.value.isFeatured,
+      isVerified: editForm.value.isVerified
+    }
+    const res = await adminService.updateProject(projectId.value, body)
+    const updated = extractProject(res)
+    if (updated && get(updated, 'id')) {
+      project.value = { ...project.value, ...updated }
+    } else {
+      await loadProject()
+    }
+    editModalOpen.value = false
+    toast.add({
+      title: 'Saved',
+      description: 'Project updated successfully.',
+      color: 'success',
+      icon: 'i-lucide-check'
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Update failed'
+    error.value = msg
+    toast.add({ title: 'Update failed', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
+  } finally {
+    editSaving.value = false
   }
 }
 
@@ -63,22 +169,46 @@ async function publishProject() {
   try {
     await adminService.publishProject(projectId.value)
     await loadProject()
-  } catch {
-    error.value = 'Failed to publish project'
+    toast.add({
+      title: 'Published',
+      description: 'This project is now published.',
+      color: 'success',
+      icon: 'i-lucide-check-circle'
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Failed to publish project'
+    error.value = msg
+    toast.add({ title: 'Publish failed', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
   } finally {
     saving.value = false
   }
 }
 
-async function rejectProject(reason?: string) {
+function openRejectModal() {
+  rejectReasonInput.value = ''
+  rejectModalOpen.value = true
+}
+
+async function confirmRejectProject() {
   if (!projectId.value) return
   saving.value = true
   error.value = null
+  const reason = rejectReasonInput.value.trim()
   try {
     await adminService.rejectProject(projectId.value, reason ? { reason } : undefined)
+    rejectModalOpen.value = false
+    rejectReasonInput.value = ''
     await loadProject()
-  } catch {
-    error.value = 'Failed to reject project'
+    toast.add({
+      title: 'Rejected',
+      description: reason ? 'Reason recorded.' : 'Project rejected.',
+      color: 'warning',
+      icon: 'i-lucide-ban'
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Failed to reject project'
+    error.value = msg
+    toast.add({ title: 'Reject failed', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
   } finally {
     saving.value = false
   }
@@ -148,51 +278,134 @@ function goBack() {
   router.push('/projects')
 }
 
-onMounted(loadProject)
+watch(
+  projectId,
+  () => {
+    loadProject()
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
   <div class="min-h-full min-w-0 w-full overflow-x-hidden">
-    <div class="flex flex-row flex-wrap items-center justify-between gap-4 min-w-0 overflow-hidden">
-      <div class="flex min-w-0 items-center gap-4">
-        <NuxtLink
-          to="/projects"
-          class="flex shrink-0 items-center gap-2 rounded-xl border border-gray-200/80 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all hover:border-gray-300 hover:bg-gray-50 hover:shadow-md dark:border-gray-600 dark:bg-gray-800/80 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-800"
-        >
-          <UIcon name="i-lucide-arrow-left" class="size-4" />
-          Back
-        </NuxtLink>
-        <AppPageHeader
-          :title="project ? String(get(project, 'name') ?? 'Project') : 'Project Details'"
-          description="View and manage project details"
-        />
-      </div>
-      <div v-if="project" class="flex shrink-0 flex-row flex-nowrap items-center gap-3">
-        <AppButton
-          v-if="get(project, 'approvalStatus') !== 'PUBLISHED'"
-          size="sm"
-          :loading="saving"
-          class="!rounded-xl !px-4 !py-2.5 !font-semibold !shadow-md !shadow-emerald-500/25 transition-all hover:!shadow-lg hover:!shadow-emerald-500/30"
-          @click="publishProject"
-        >
-          <UIcon name="i-lucide-check-circle" class="size-4" />
-          Publish
-        </AppButton>
-        <AppButton
-          v-if="get(project, 'approvalStatus') !== 'REJECTED'"
-          variant="outline"
-          size="sm"
-          :loading="saving"
-          class="!rounded-xl !border-red-200 !px-4 !py-2.5 !font-semibold text-red-600 transition-all hover:!border-red-300 hover:!bg-red-50 hover:!shadow-md dark:!border-red-800 dark:text-red-400 dark:hover:!bg-red-950/30"
-          @click="rejectProject()"
-        >
-          <UIcon name="i-lucide-x-circle" class="size-4" />
-          Reject
-        </AppButton>
-      </div>
-    </div>
+    <header
+      class="sticky top-0 z-30 -mx-1 mb-6 rounded-2xl border border-gray-200/70 bg-white/90 px-3 py-4 shadow-sm shadow-gray-200/40 backdrop-blur-xl dark:border-gray-700/80 dark:bg-gray-950/85 dark:shadow-none sm:-mx-2 sm:px-5 sm:py-5"
+    >
+      <div class="flex flex-col gap-5">
+        <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+          <NuxtLink
+            to="/projects"
+            class="project-detail-back flex w-fit shrink-0 items-center gap-2 rounded-xl border border-gray-200/90 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all hover:border-emerald-200 hover:bg-emerald-50/50 hover:text-emerald-800 dark:border-gray-600 dark:bg-gray-800/90 dark:text-gray-200 dark:hover:border-emerald-800 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-300"
+          >
+            <UIcon name="i-lucide-arrow-left" class="size-4" />
+            All projects
+          </NuxtLink>
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-2.5">
+              <h1 class="text-xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-2xl">
+                {{ project ? String(get(project, 'name') ?? 'Project') : loading ? 'Loading…' : 'Project' }}
+              </h1>
+              <span
+                v-if="project"
+                :class="
+                  get(project, 'approvalStatus') === 'PUBLISHED'
+                    ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200/80 dark:bg-emerald-900/45 dark:text-emerald-200 dark:ring-emerald-800/50'
+                    : get(project, 'approvalStatus') === 'REJECTED'
+                      ? 'bg-red-100 text-red-800 ring-1 ring-red-200/80 dark:bg-red-900/40 dark:text-red-200 dark:ring-red-800/50'
+                      : 'bg-amber-100 text-amber-900 ring-1 ring-amber-200/70 dark:bg-amber-900/40 dark:text-amber-100 dark:ring-amber-800/50'
+                "
+                class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold"
+              >
+                <span
+                  :class="
+                    get(project, 'approvalStatus') === 'PUBLISHED'
+                      ? 'bg-emerald-500'
+                      : get(project, 'approvalStatus') === 'REJECTED'
+                        ? 'bg-red-500'
+                        : 'bg-amber-500'
+                  "
+                  class="h-1.5 w-1.5 rounded-full"
+                />
+                {{ get(project, 'approvalStatus') ?? '—' }}
+              </span>
+            </div>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Review details, edit listing fields, and publish or reject when ready.
+            </p>
+          </div>
+        </div>
 
-    <div class="mt-4">
+        <div
+          v-if="project"
+          class="border-t border-gray-200/80 pt-4 dark:border-gray-700/80"
+        >
+          <div class="lb-detail-action-panel min-w-0">
+            <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              Actions
+            </p>
+            <div class="lb-detail-toolbar">
+              <AppButton
+                color="primary"
+                size="sm"
+                class="lb-detail-action-btn lb-detail-action-btn--primary"
+                @click="openEditModal"
+              >
+                <UIcon name="i-lucide-pencil" class="size-4 shrink-0" />
+                Edit project
+              </AppButton>
+              <AppButton
+                v-if="get(project, 'approvalStatus') !== 'PUBLISHED'"
+                variant="outline"
+                color="primary"
+                size="sm"
+                :loading="saving"
+                class="lb-detail-action-btn"
+                @click="publishProject"
+              >
+                <UIcon name="i-lucide-check" class="size-4 shrink-0" />
+                Publish
+              </AppButton>
+              <AppButton
+                v-if="get(project, 'approvalStatus') !== 'REJECTED'"
+                variant="outline"
+                color="error"
+                size="sm"
+                :loading="saving"
+                class="lb-detail-action-btn"
+                @click="openRejectModal"
+              >
+                <UIcon name="i-lucide-x" class="size-4 shrink-0" />
+                Reject
+              </AppButton>
+              <span class="lb-detail-toolbar__divider" aria-hidden="true" />
+              <AppButton
+                variant="outline"
+                color="neutral"
+                size="sm"
+                class="lb-detail-action-btn"
+                @click="copyText('Project ID', String(get(project, 'id') ?? ''))"
+              >
+                <UIcon name="i-lucide-hash" class="size-4 shrink-0" />
+                Copy project ID
+              </AppButton>
+              <AppButton
+                variant="outline"
+                color="neutral"
+                size="sm"
+                class="lb-detail-action-btn"
+                @click="copyProjectPageLink"
+              >
+                <UIcon name="i-lucide-link" class="size-4 shrink-0" />
+                Copy page link
+              </AppButton>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="mt-0">
     <Transition name="profile-notification">
       <div
         v-if="error"
@@ -226,8 +439,9 @@ onMounted(loadProject)
       <p class="text-gray-500 dark:text-gray-400">Project not found</p>
       <AppButton
         variant="outline"
+        color="neutral"
         size="sm"
-        class="!rounded-xl !px-4 !py-2.5 !font-semibold transition-all hover:!shadow-md"
+        class="lb-detail-action-btn"
         @click="goBack"
       >
         Back to Projects
@@ -631,6 +845,172 @@ onMounted(loadProject)
         </div>
       </div>
     </template>
+
+    <UModal
+      v-model:open="editModalOpen"
+      :ui="adminModalUiWide"
+      description="Update the fields below, then save. Your changes apply as soon as the save succeeds."
+    >
+      <template #title>
+        <span class="flex items-center gap-3">
+          <span
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20"
+          >
+            <UIcon name="i-lucide-pencil" class="size-[18px]" />
+          </span>
+          <span>Edit project</span>
+        </span>
+      </template>
+      <template #body>
+        <div
+          class="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-[0_1px_0_rgba(0,0,0,0.04),0_12px_32px_-8px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.03] dark:border-gray-700/90 dark:bg-gray-900 dark:shadow-none dark:ring-white/[0.06] sm:p-6"
+        >
+          <div class="space-y-6">
+            <div
+              class="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,6.5rem)_1fr] sm:items-center sm:gap-x-6 sm:gap-y-0"
+            >
+              <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:pt-0">Name</label>
+              <input
+                v-model="editForm.name"
+                type="text"
+                autocomplete="off"
+                class="w-full min-h-10 rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 transition-colors focus:border-[#66de80] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#66de80]/25 dark:border-gray-600 dark:bg-gray-950/80 dark:text-white dark:focus:bg-gray-900"
+              >
+            </div>
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,6.5rem)_1fr] sm:items-start sm:gap-x-6">
+              <label class="pt-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:pt-2.5">Description</label>
+              <textarea
+                v-model="editForm.description"
+                rows="5"
+                class="w-full resize-y rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-3 text-sm leading-relaxed text-gray-900 transition-colors placeholder:text-gray-400 focus:border-[#66de80] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#66de80]/25 dark:border-gray-600 dark:bg-gray-950/80 dark:text-white dark:placeholder-gray-500 dark:focus:bg-gray-900"
+              />
+            </div>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6">
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Category</label>
+                <select
+                  v-model="editForm.category"
+                  class="w-full min-h-10 cursor-pointer rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 transition-colors focus:border-[#66de80] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#66de80]/25 dark:border-gray-600 dark:bg-gray-950/80 dark:text-white dark:focus:bg-gray-900"
+                >
+                  <option value="">Select category</option>
+                  <option v-for="opt in categoryEditOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Project type</label>
+                <select
+                  v-model="editForm.projectType"
+                  class="w-full min-h-10 cursor-pointer rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 transition-colors focus:border-[#66de80] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#66de80]/25 dark:border-gray-600 dark:bg-gray-950/80 dark:text-white dark:focus:bg-gray-900"
+                >
+                  <option value="">Select type</option>
+                  <option v-for="opt in projectTypeEditOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+              </div>
+            </div>
+            <div
+              class="rounded-xl border border-[#66de80]/20 bg-gradient-to-br from-emerald-50/80 to-white px-4 py-4 dark:border-emerald-500/20 dark:from-emerald-950/25 dark:to-gray-900/80"
+            >
+              <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-emerald-800/90 dark:text-emerald-300/90">
+                Visibility flags
+              </p>
+              <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-8">
+                <label
+                  class="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-gray-800 dark:text-gray-200"
+                >
+                  <input
+                    v-model="editForm.isFeatured"
+                    type="checkbox"
+                    class="size-4 shrink-0 rounded border-gray-300 text-[#66de80] focus:ring-[#66de80]"
+                  >
+                  Featured listing
+                </label>
+                <label
+                  class="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-gray-800 dark:text-gray-200"
+                >
+                  <input
+                    v-model="editForm.isVerified"
+                    type="checkbox"
+                    class="size-4 shrink-0 rounded border-gray-300 text-[#66de80] focus:ring-[#66de80]"
+                  >
+                  Verified
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template #footer="{ close }">
+        <div class="admin-btn-modal-footer">
+          <AppButton
+            variant="outline"
+            color="neutral"
+            size="sm"
+            class="lb-modal-btn-cancel"
+            :disabled="editSaving"
+            @click="close()"
+          >
+            Cancel
+          </AppButton>
+          <AppButton
+            color="primary"
+            size="sm"
+            icon="i-lucide-check"
+            class="lb-modal-btn-submit-wide"
+            :loading="editSaving"
+            :disabled="!editForm.name.trim()"
+            @click="saveProjectEdits"
+          >
+            Save changes
+          </AppButton>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal
+      v-model:open="rejectModalOpen"
+      title="Reject project"
+      :ui="adminModalUiCompact"
+    >
+      <template #body>
+        <div class="space-y-4">
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            The lister may see an optional reason you add below.
+          </p>
+          <div class="space-y-2">
+            <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Reason (optional)</label>
+            <textarea
+              v-model="rejectReasonInput"
+              rows="3"
+              placeholder="e.g. Missing RERA details"
+              class="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-inner placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
+            />
+          </div>
+        </div>
+      </template>
+      <template #footer="{ close }">
+        <div class="admin-btn-modal-footer">
+          <AppButton
+            variant="outline"
+            color="neutral"
+            size="sm"
+            class="lb-modal-btn-cancel"
+            :disabled="saving"
+            @click="close()"
+          >
+            Cancel
+          </AppButton>
+          <AppButton
+            color="error"
+            size="sm"
+            class="lb-modal-btn-submit"
+            :loading="saving"
+            @click="confirmRejectProject"
+          >
+            Confirm rejection
+          </AppButton>
+        </div>
+      </template>
+    </UModal>
     </div>
   </div>
 </template>

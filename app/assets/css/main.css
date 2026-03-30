@@ -127,14 +127,14 @@ body,
 
 /* ─── Profile page buttons (Nuxt UI UButton: use icon + label props; these classes style the root) ─ */
 .profile-btn-primary {
-  @apply !min-h-10 w-full cursor-pointer !rounded-xl !px-4 !py-2.5 text-sm font-semibold !shadow-md transition-all duration-300 ease-out sm:w-auto;
+  @apply !min-h-9 w-full cursor-pointer !rounded-full !px-3.5 !py-2 text-sm font-semibold !shadow-md transition-all duration-300 ease-out sm:w-auto;
   background: linear-gradient(135deg, rgb(16 185 129) 0%, rgb(5 150 105) 100%) !important;
   box-shadow: 0 4px 6px -1px rgb(16 185 129 / 0.2) !important;
   border: none !important;
 }
 /* Ensure Nuxt UI inner slots stay visible on gradient */
 .profile-btn-primary :deep([data-slot="base"]) {
-  @apply inline-flex min-h-10 w-full items-center justify-center gap-2 sm:w-auto;
+  @apply inline-flex min-h-9 w-full items-center justify-center gap-1.5 sm:w-auto;
 }
 .profile-btn-primary :deep([data-slot="leadingIcon"]),
 .profile-btn-primary :deep([data-slot="label"]) {
@@ -151,13 +151,13 @@ body,
 }
 
 .profile-btn-secondary {
-  @apply !min-h-10 w-full cursor-pointer !rounded-xl !border-2 !px-4 !py-2.5 text-sm font-semibold transition-all duration-300 ease-out sm:w-auto;
+  @apply !min-h-9 w-full cursor-pointer !rounded-full !border-2 !px-3.5 !py-2 text-sm font-semibold transition-all duration-300 ease-out sm:w-auto;
   border-color: rgb(16 185 129 / 0.55) !important;
   color: rgb(4 120 87) !important;
   background: transparent !important;
 }
 .profile-btn-secondary :deep([data-slot="base"]) {
-  @apply inline-flex min-h-10 w-full items-center justify-center gap-2 sm:w-auto;
+  @apply inline-flex min-h-9 w-full items-center justify-center gap-1.5 sm:w-auto;
 }
 .profile-btn-secondary :deep([data-slot="leadingIcon"]),
 .profile-btn-secondary :deep([data-slot="label"]) {
@@ -184,13 +184,13 @@ body,
 }
 
 .profile-btn-danger {
-  @apply !min-h-10 w-full cursor-pointer !rounded-xl !border-2 !px-4 !py-2.5 text-sm font-semibold transition-all duration-300 ease-out sm:w-auto;
+  @apply !min-h-9 w-full cursor-pointer !rounded-full !border-2 !px-3.5 !py-2 text-sm font-semibold transition-all duration-300 ease-out sm:w-auto;
   border-color: rgb(239 68 68 / 0.55) !important;
   color: rgb(185 28 28) !important;
   background: transparent !important;
 }
 .profile-btn-danger :deep([data-slot="base"]) {
-  @apply inline-flex min-h-10 w-full items-center justify-center gap-2 sm:w-auto;
+  @apply inline-flex min-h-9 w-full items-center justify-center gap-1.5 sm:w-auto;
 }
 .profile-btn-danger :deep([data-slot="leadingIcon"]),
 .profile-btn-danger :deep([data-slot="label"]) {
@@ -289,4 +289,567 @@ body,
 }
 .dashboard-quick-link:hover {
   transform: translateY(-2px) scale(1.02);
+}
+
+/* ─── LiveBhoomi mint pill buttons (#66DE80) — add .lb-action-btn to UButton, or use AppButton ─ */
+.lb-action-btn {
+  border-radius: 9999px !important;
+}
+
+/*
+ * AppButton marks the real DOM node with data-lb-* so chrome does not depend on Tailwind
+ * emitting `.bg-primary` / `.ring-inset` (fixes “plain text” buttons in modals / portals).
+ */
+.lb-action-btn[data-lb-btn] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+  font-weight: 600 !important;
+  text-decoration: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  vertical-align: middle !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='primary'],
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='success'] {
+  border-width: 0 !important;
+  border-style: solid !important;
+  background-color: #66de80 !important;
+  color: #0f172a !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  box-shadow: none !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='primary']:hover,
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='success']:hover,
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='primary']:focus-visible,
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='success']:focus-visible {
+  background-color: #52c96c !important;
+  color: #0f172a !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='primary']:disabled,
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='success']:disabled,
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='primary'][aria-disabled='true'],
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='success'][aria-disabled='true'] {
+  opacity: 0.65;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='error'] {
+  border-width: 0 !important;
+  background-color: #dc2626 !important;
+  color: #fff !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='error']:hover,
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='error']:focus-visible {
+  background-color: #b91c1c !important;
+  color: #fff !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='outline'][data-lb-color='neutral'] {
+  background-color: transparent !important;
+  color: #3f3f46 !important;
+  border-width: 1.5px !important;
+  border-style: solid !important;
+  border-color: #a1a1aa !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  box-shadow: none !important;
+}
+
+.dark .lb-action-btn[data-lb-btn][data-lb-variant='outline'][data-lb-color='neutral'] {
+  color: #f4f4f5 !important;
+  border-color: #52525b !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='outline'][data-lb-color='neutral']:hover {
+  background-color: rgb(0 0 0 / 0.05) !important;
+}
+
+.dark .lb-action-btn[data-lb-btn][data-lb-variant='outline'][data-lb-color='neutral']:hover {
+  background-color: rgb(255 255 255 / 0.06) !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='outline'][data-lb-color='primary'] {
+  background-color: transparent !important;
+  color: #66de80 !important;
+  border-width: 1.5px !important;
+  border-style: solid !important;
+  border-color: #66de80 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  box-shadow: none !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='outline'][data-lb-color='primary']:hover {
+  background-color: rgb(102 222 128 / 0.12) !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='outline'][data-lb-color='error'] {
+  background-color: transparent !important;
+  color: #dc2626 !important;
+  border-width: 1.5px !important;
+  border-style: solid !important;
+  border-color: #f87171 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  box-shadow: none !important;
+}
+
+.dark .lb-action-btn[data-lb-btn][data-lb-variant='outline'][data-lb-color='error'] {
+  color: #fca5a5 !important;
+  border-color: #f87171 !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='outline'][data-lb-color='error']:hover {
+  background-color: rgb(239 68 68 / 0.1) !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='soft'][data-lb-color='primary'],
+.lb-action-btn[data-lb-btn][data-lb-variant='soft'][data-lb-color='success'] {
+  background-color: rgb(102 222 128 / 0.18) !important;
+  color: #66de80 !important;
+  border-width: 0 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='soft'][data-lb-color='error'] {
+  background-color: rgb(239 68 68 / 0.18) !important;
+  color: #fca5a5 !important;
+  border-width: 0 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='ghost'] {
+  background-color: transparent !important;
+  border-width: 0 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  box-shadow: none !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='primary'] [data-slot='leadingIcon'],
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='primary'] [data-slot='label'],
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='success'] [data-slot='leadingIcon'],
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='success'] [data-slot='label'] {
+  color: #0f172a !important;
+}
+
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='error'] [data-slot='leadingIcon'],
+.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='error'] [data-slot='label'] {
+  color: #fff !important;
+}
+
+/* Solid primary & success: mint fill + dark text (reference UI) */
+.lb-action-btn.bg-primary,
+.lb-action-btn.bg-success {
+  background-color: #66de80 !important;
+  color: #0f172a !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  box-shadow: none !important;
+}
+
+.lb-action-btn.bg-primary:hover,
+.lb-action-btn.bg-success:hover,
+.lb-action-btn.bg-primary:focus-visible,
+.lb-action-btn.bg-success:focus-visible {
+  background-color: #52c96c !important;
+  color: #0f172a !important;
+}
+
+.lb-action-btn.bg-primary:disabled,
+.lb-action-btn.bg-success:disabled,
+.lb-action-btn.bg-primary[aria-disabled="true"],
+.lb-action-btn.bg-success[aria-disabled="true"] {
+  background-color: #66de80 !important;
+  color: #0f172a !important;
+  opacity: 0.65;
+}
+
+/* Modal footers: subtle lift on solid actions (overrides flat rule above) */
+.admin-btn-modal-footer .lb-action-btn.bg-primary,
+.admin-btn-modal-footer .lb-action-btn.bg-success,
+.admin-btn-modal-footer .lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='primary'],
+.admin-btn-modal-footer .lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='success'] {
+  box-shadow: 0 4px 16px -4px rgb(102 222 128 / 0.45) !important;
+}
+
+.admin-btn-modal-footer .lb-action-btn.bg-error,
+.admin-btn-modal-footer .lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='error'] {
+  box-shadow: 0 4px 16px -4px rgb(239 68 68 / 0.35) !important;
+}
+
+/* Outline mint (primary color only — neutral outline clipboard keeps default ring) */
+.lb-action-btn.ring-inset.text-primary {
+  color: #66de80 !important;
+  background-color: transparent !important;
+  box-shadow: inset 0 0 0 1.5px #66de80 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+.lb-action-btn.ring-inset.text-primary:hover {
+  background-color: rgb(102 222 128 / 0.12) !important;
+}
+
+/* Outline destructive (detail Reject, etc.) */
+.lb-action-btn.ring-inset.text-error {
+  color: rgb(185 28 28) !important;
+  background-color: transparent !important;
+  box-shadow: inset 0 0 0 1.5px rgb(220 38 38) !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+.lb-action-btn.ring-inset.text-error:hover {
+  background-color: rgb(239 68 68 / 0.08) !important;
+}
+
+.dark .lb-action-btn.ring-inset.text-error {
+  color: rgb(252 165 165) !important;
+  box-shadow: inset 0 0 0 1.5px rgb(248 113 113) !important;
+}
+
+.dark .lb-action-btn.ring-inset.text-error:hover {
+  background-color: rgb(239 68 68 / 0.12) !important;
+}
+
+/* Soft primary / success (e.g. table row actions) */
+.lb-action-btn.text-primary:not(.bg-primary),
+.lb-action-btn.text-success:not(.bg-success) {
+  color: #66de80 !important;
+}
+
+.lb-action-btn[class*="bg-primary/10"],
+.lb-action-btn[class*="bg-success/10"] {
+  background-color: rgb(102 222 128 / 0.16) !important;
+}
+
+/* Soft neutral (pagination): pill + subtle mint tint */
+.lb-action-btn.text-default.bg-elevated:not(.text-primary):not(.text-success):not(.text-error) {
+  color: rgb(21 128 61) !important;
+  background-color: rgb(102 222 128 / 0.1) !important;
+}
+
+.dark .lb-action-btn.text-default.bg-elevated:not(.text-primary):not(.text-success):not(.text-error) {
+  color: #86efac !important;
+  background-color: rgb(102 222 128 / 0.12) !important;
+}
+
+.dark .lb-action-btn.text-default.bg-elevated:not(.text-primary):not(.text-success):not(.text-error):hover {
+  background-color: rgb(102 222 128 / 0.18) !important;
+}
+
+/* Soft destructive (table + detail toolbars) */
+.lb-action-btn.text-error:not(.bg-error) {
+  color: rgb(185 28 28) !important;
+}
+
+.lb-action-btn[class*="bg-error/10"] {
+  background-color: rgb(239 68 68 / 0.14) !important;
+}
+
+.lb-action-btn[class*="bg-error/10"]:hover {
+  background-color: rgb(239 68 68 / 0.22) !important;
+}
+
+.dark .lb-action-btn.text-error:not(.bg-error) {
+  color: rgb(252 165 165) !important;
+}
+
+.dark .lb-action-btn[class*="bg-error/10"] {
+  background-color: rgb(239 68 68 / 0.18) !important;
+}
+
+.dark .lb-action-btn[class*="bg-error/10"]:hover {
+  background-color: rgb(239 68 68 / 0.26) !important;
+}
+
+/* ─── Admin: layout helpers (pair with .lb-action-btn on raw UButton) ─ */
+.admin-btn-page {
+  @apply min-h-9 justify-center gap-1.5 text-sm font-semibold;
+}
+.admin-btn-page-fluid {
+  @apply w-full sm:w-auto;
+}
+.admin-btn-table {
+  @apply min-h-8 shrink-0 justify-center gap-1 px-2.5 text-xs font-semibold;
+}
+.admin-btn-pagination {
+  @apply min-h-8 justify-center gap-0.5 px-1.5 text-xs font-medium;
+}
+/* Modal footers: dismiss first in DOM (top on mobile, left on desktop); primary last (bottom / right) */
+.admin-btn-modal-footer {
+  @apply flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-3;
+}
+
+.admin-btn-modal-footer--single {
+  @apply sm:justify-end;
+}
+
+/*
+ * Nuxt UI renders the real <button> as [data-slot="base"]. Custom attrs like data-lb-btn
+ * may not land on that node in all versions — style modal actions by slot + our lb-modal-* classes.
+ */
+.admin-btn-modal-footer [data-slot='base'] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+  gap: 0.5rem !important;
+  border-radius: 9999px !important;
+  min-height: 2.5rem !important;
+  padding-left: 1.25rem !important;
+  padding-right: 1.25rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  line-height: 1.25rem !important;
+  letter-spacing: -0.01em !important;
+  cursor: pointer !important;
+  text-decoration: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  vertical-align: middle !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-cancel {
+  background-color: transparent !important;
+  color: #3f3f46 !important;
+  border-width: 1.5px !important;
+  border-style: solid !important;
+  border-color: #a1a1aa !important;
+  box-shadow: none !important;
+}
+
+.dark .admin-btn-modal-footer [data-slot='base'].lb-modal-btn-cancel {
+  color: #f4f4f5 !important;
+  border-color: #52525b !important;
+}
+
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-cancel:hover {
+  background-color: rgb(0 0 0 / 0.06) !important;
+}
+
+.dark .admin-btn-modal-footer [data-slot='base'].lb-modal-btn-cancel:hover {
+  background-color: rgb(255 255 255 / 0.08) !important;
+}
+
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-submit,
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-submit-wide {
+  border-width: 0 !important;
+  background-color: #66de80 !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 16px -4px rgb(102 222 128 / 0.45) !important;
+}
+
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-submit:hover,
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-submit-wide:hover {
+  background-color: #52c96c !important;
+  color: #0f172a !important;
+}
+
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-submit.bg-error,
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-submit-wide.bg-error {
+  background-color: #dc2626 !important;
+  color: #fff !important;
+  box-shadow: 0 4px 16px -4px rgb(239 68 68 / 0.35) !important;
+}
+
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-submit.bg-error:hover,
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-submit-wide.bg-error:hover {
+  background-color: #b91c1c !important;
+  color: #fff !important;
+}
+
+.admin-btn-modal-footer [data-slot='base'] [data-slot='leadingIcon'],
+.admin-btn-modal-footer [data-slot='base'] [data-slot='label'] {
+  color: inherit !important;
+}
+
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-submit [data-slot='leadingIcon'],
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-submit [data-slot='label'],
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-submit-wide [data-slot='leadingIcon'],
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-submit-wide [data-slot='label'] {
+  color: #0f172a !important;
+}
+
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-submit.bg-error [data-slot='leadingIcon'],
+.admin-btn-modal-footer [data-slot='base'].lb-modal-btn-submit.bg-error [data-slot='label'] {
+  color: #fff !important;
+}
+
+.admin-btn-modal-footer [data-slot='base']:disabled,
+.admin-btn-modal-footer [data-slot='base'][aria-disabled='true'] {
+  cursor: not-allowed !important;
+  opacity: 0.65;
+}
+
+/* Standard modal action buttons (pair with AppButton + lb-action-btn) */
+.lb-modal-btn-cancel {
+  @apply min-h-10 w-full min-w-0 justify-center gap-2 px-5 text-sm font-semibold tracking-tight sm:w-auto sm:min-w-[8rem];
+}
+
+.lb-modal-btn-submit {
+  @apply min-h-10 w-full min-w-0 justify-center gap-2 px-5 text-sm font-semibold tracking-tight sm:w-auto sm:min-w-[10rem];
+}
+
+.lb-modal-btn-submit-wide {
+  @apply min-h-10 w-full min-w-0 justify-center gap-2 px-6 text-sm font-semibold tracking-tight sm:w-auto sm:min-w-[12rem];
+}
+
+/* Wide preview modal: hint row + action cluster */
+.lb-modal-footer-document {
+  @apply flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4;
+}
+
+.lb-modal-footer-document__actions {
+  @apply flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end sm:gap-2;
+}
+
+/*
+ * Listing / project detail header: one panel, one wrapping toolbar (workflow + clipboard)
+ */
+.lb-detail-action-panel {
+  @apply rounded-2xl border border-gray-200/90 bg-white p-5 shadow-sm shadow-gray-200/30 dark:border-gray-700/80 dark:bg-gray-900/60 dark:shadow-none;
+}
+
+.lb-detail-toolbar {
+  @apply flex w-full min-w-0 flex-wrap items-center gap-2;
+}
+
+.lb-detail-toolbar__divider {
+  @apply hidden h-7 w-px shrink-0 self-center rounded-full bg-gray-200 dark:bg-gray-600 sm:block;
+}
+
+.lb-detail-action-btn {
+  @apply min-h-10 w-full justify-center gap-2 px-4 text-sm font-semibold tracking-tight sm:w-auto sm:px-5;
+}
+
+/* Detail toolbar: same as modal — target Nuxt UI button root [data-slot="base"] */
+.lb-detail-action-panel [data-slot='base'] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+  gap: 0.5rem !important;
+  border-radius: 9999px !important;
+  min-height: 2.5rem !important;
+  padding-left: 1.125rem !important;
+  padding-right: 1.125rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  cursor: pointer !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+.lb-detail-action-panel [data-slot='base'].lb-detail-action-btn--primary {
+  border-width: 0 !important;
+  background-color: #66de80 !important;
+  color: #0f172a !important;
+  box-shadow: 0 3px 14px -3px rgb(102 222 128 / 0.44) !important;
+}
+
+.lb-detail-action-panel [data-slot='base'].lb-detail-action-btn--primary:hover {
+  background-color: #52c96c !important;
+}
+
+.lb-detail-action-panel [data-slot='base'].ring-inset.text-primary {
+  background-color: transparent !important;
+  color: #66de80 !important;
+  border-width: 1.5px !important;
+  border-style: solid !important;
+  border-color: #66de80 !important;
+  box-shadow: none !important;
+}
+
+.lb-detail-action-panel [data-slot='base'].ring-inset.text-primary:hover {
+  background-color: rgb(102 222 128 / 0.12) !important;
+}
+
+.lb-detail-action-panel [data-slot='base'].ring-inset.text-error {
+  background-color: transparent !important;
+  color: #dc2626 !important;
+  border-width: 1.5px !important;
+  border-style: solid !important;
+  border-color: #f87171 !important;
+  box-shadow: none !important;
+}
+
+.dark .lb-detail-action-panel [data-slot='base'].ring-inset.text-error {
+  color: #fca5a5 !important;
+}
+
+.lb-detail-action-panel [data-slot='base'].ring-inset.text-error:hover {
+  background-color: rgb(239 68 68 / 0.1) !important;
+}
+
+.lb-detail-action-panel [data-slot='base'].ring-inset.text-default {
+  background-color: transparent !important;
+  color: #3f3f46 !important;
+  border-width: 1.5px !important;
+  border-style: solid !important;
+  border-color: #a1a1aa !important;
+  box-shadow: none !important;
+}
+
+.dark .lb-detail-action-panel [data-slot='base'].ring-inset.text-default {
+  color: #f4f4f5 !important;
+  border-color: #52525b !important;
+}
+
+.lb-detail-action-panel [data-slot='base'].ring-inset.text-default:hover {
+  background-color: rgb(0 0 0 / 0.05) !important;
+}
+
+.dark .lb-detail-action-panel [data-slot='base'].ring-inset.text-default:hover {
+  background-color: rgb(255 255 255 / 0.06) !important;
+}
+
+.lb-detail-action-panel [data-slot='base'] :where(svg, [data-slot='leadingIcon']) {
+  flex-shrink: 0;
+}
+
+/* Enforce pill padding on the real control (detail header; works with data-lb-btn AppButton) */
+.lb-detail-action-panel .lb-detail-action-btn.lb-action-btn[data-lb-btn] {
+  min-height: 2.5rem !important;
+  padding-left: 1.125rem !important;
+  padding-right: 1.125rem !important;
+}
+
+.lb-detail-action-panel .lb-detail-action-btn.lb-action-btn[data-lb-btn] :where(svg, [data-slot='leadingIcon']) {
+  flex-shrink: 0;
+}
+
+.lb-detail-action-btn--primary.lb-action-btn.bg-primary,
+.lb-detail-action-btn--primary.lb-action-btn.bg-success,
+.lb-detail-action-btn--primary.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='primary'],
+.lb-detail-action-btn--primary.lb-action-btn[data-lb-btn][data-lb-variant='solid'][data-lb-color='success'] {
+  box-shadow: 0 3px 14px -3px rgb(102 222 128 / 0.44) !important;
+}
+
+/* Outline mint / red: icon + label match ring (leadingIcon when using icon prop; UIcon in default slot inherits color) */
+.lb-action-btn.ring-inset.text-primary :deep([data-slot='leadingIcon']),
+.lb-action-btn.ring-inset.text-primary :deep([data-slot='label']) {
+  color: #66de80 !important;
+}
+
+.lb-action-btn.ring-inset.text-error :deep([data-slot='leadingIcon']),
+.lb-action-btn.ring-inset.text-error :deep([data-slot='label']) {
+  color: rgb(185 28 28) !important;
+}
+
+.dark .lb-action-btn.ring-inset.text-error :deep([data-slot='leadingIcon']),
+.dark .lb-action-btn.ring-inset.text-error :deep([data-slot='label']) {
+  color: rgb(252 165 165) !important;
+}
+
+/* Mint solid: keep icon + label same ink as fill */
+.lb-action-btn.bg-primary :deep([data-slot='leadingIcon']),
+.lb-action-btn.bg-primary :deep([data-slot='label']),
+.lb-action-btn.bg-success :deep([data-slot='leadingIcon']),
+.lb-action-btn.bg-success :deep([data-slot='label']) {
+  color: #0f172a !important;
 }

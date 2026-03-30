@@ -5,6 +5,7 @@ import AppButton from '~/components/ui/AppButton.vue'
 import { useAdminService } from '~/services/api'
 import { get } from '~/utils/lodash'
 import { extractProfiles, extractPaginationMeta, type PaginationMeta } from '~/utils/api-extract'
+import { adminModalUiCompact } from '~/utils/admin-modal-ui'
 
 definePageMeta({
   layout: 'admin',
@@ -14,6 +15,12 @@ definePageMeta({
 
 const adminService = useAdminService()
 const toast = useToast()
+
+/** Row payload for `/partners/:id` — list API has no GET-by-id; detail uses this snapshot. */
+const selectedPartnerFromList = useState<Record<string, unknown> | null>(
+  'admin-partners-selected-profile',
+  () => null
+)
 
 const profilesRaw = ref<Record<string, unknown>[]>([])
 const loading = ref(false)
@@ -108,6 +115,17 @@ function resetFilters() {
 
 function refresh() {
   loadProfiles()
+}
+
+/** UTable @select — ignores clicks on buttons (Approve/Reject). */
+function onPartnerRowSelect(_e: Event, row: { original: Record<string, unknown> }) {
+  const original = row.original
+  const id = original?.id
+  if (id == null) return
+  const sid = String(id).trim()
+  if (!sid || sid === '—') return
+  selectedPartnerFromList.value = { ...original }
+  navigateTo(`/partners/${sid}`)
 }
 
 function goPrev() {
@@ -295,31 +313,29 @@ const columns = computed(() => {
       const busy = actionLoading.value === id
       const showApprove = status !== 'APPROVED'
       const showReject = status !== 'REJECTED'
-      return h('div', { class: 'flex flex-nowrap items-center justify-end gap-2 py-1' }, [
+      return h('div', { class: 'flex flex-nowrap items-center justify-end gap-1 py-0.5' }, [
         showApprove &&
           h(AppButton, {
             color: 'success',
-            variant: 'solid',
+            variant: 'soft',
             size: 'sm',
             icon: 'i-lucide-check',
             label: 'Approve',
             loading: busy,
             disabled: !!actionLoading.value && actionLoading.value !== id,
-            class:
-              '!min-h-[2.25rem] !rounded-xl !px-3.5 !text-xs !font-semibold !shadow-md !shadow-emerald-600/25 !ring-2 !ring-emerald-500/30 hover:!brightness-110 dark:!shadow-emerald-900/40 dark:!ring-emerald-400/35',
+            class: 'admin-btn-table lb-action-btn',
             onClick: () => openApproveConfirm(original)
           }),
         showReject &&
           h(AppButton, {
             color: 'error',
-            variant: 'solid',
+            variant: 'soft',
             size: 'sm',
             icon: 'i-lucide-x',
             label: 'Reject',
             loading: busy,
             disabled: !!actionLoading.value && actionLoading.value !== id,
-            class:
-              '!min-h-[2.25rem] !rounded-xl !px-3.5 !text-xs !font-semibold !shadow-md !shadow-red-600/30 !ring-2 !ring-red-500/35 hover:!brightness-110 dark:!shadow-red-950/50 dark:!ring-red-400/40',
+            class: 'admin-btn-table lb-action-btn',
             onClick: () => openRejectConfirm(original)
           })
       ].filter(Boolean))
@@ -364,7 +380,8 @@ watch(pageSize, () => {
           class="flex flex-col gap-3 border-b border-gray-200/80 bg-gray-50/50 px-5 py-4 dark:border-gray-800/80 dark:bg-gray-900/40 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6"
         >
           <p class="min-w-0 max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-            Use filters to narrow the list, then
+            <span class="font-medium text-gray-800 dark:text-gray-200">Click a row</span>
+            to open partner details. Use filters to narrow the list, then
             <span class="font-medium text-emerald-700 dark:text-emerald-400">Approve</span>
             or
             <span class="font-medium text-rose-700 dark:text-rose-400">Reject</span>
@@ -374,7 +391,8 @@ watch(pageSize, () => {
             icon="i-lucide-refresh-cw"
             size="sm"
             variant="outline"
-            class="w-full shrink-0 rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
+            color="neutral"
+            class="admin-btn-page admin-btn-page-fluid"
             :loading="loading"
             @click="refresh"
           >
@@ -427,21 +445,22 @@ watch(pageSize, () => {
                 :content="{ class: 'z-[9999] max-h-60 min-w-[12rem]' }"
               />
             </div>
-            <div class="flex gap-2 lg:col-span-2 lg:justify-end">
+            <div class="flex gap-1.5 lg:col-span-2 lg:justify-end">
               <AppButton
                 color="success"
-                size="md"
+                size="sm"
                 icon="i-lucide-filter"
-                class="flex-1 rounded-xl shadow-md shadow-emerald-600/20 lg:flex-none"
+                class="admin-btn-page flex-1 lg:flex-none lg:shrink-0"
                 @click="applyFilters"
               >
                 Apply
               </AppButton>
               <AppButton
                 variant="outline"
-                size="md"
+                color="neutral"
+                size="sm"
                 icon="i-lucide-rotate-ccw"
-                class="flex-1 rounded-xl border-gray-300 bg-white/90 dark:border-gray-600 dark:bg-gray-900/50 lg:flex-none"
+                class="admin-btn-page flex-1 lg:flex-none lg:shrink-0"
                 @click="resetFilters"
               >
                 Reset
@@ -464,6 +483,7 @@ watch(pageSize, () => {
               :loading="loading"
               class="partners-table min-w-0"
               empty="No partners match your filters."
+              @select="onPartnerRowSelect"
             />
           </div>
         </div>
@@ -495,24 +515,24 @@ watch(pageSize, () => {
                   :content="{ class: 'z-[9999] max-h-60 min-w-[6.5rem]' }"
                 />
               </div>
-              <div class="flex items-center gap-1.5 rounded-xl bg-white/90 p-1 ring-1 ring-gray-200/90 dark:bg-gray-900/90 dark:ring-gray-700">
+              <div class="flex items-center gap-1 rounded-xl bg-white/90 p-0.5 ring-1 ring-gray-200/90 dark:bg-gray-900/90 dark:ring-gray-700">
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   icon="i-lucide-chevrons-left"
                   :disabled="metadata.page <= 1 || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   aria-label="First page"
                   @click="goFirstPage"
                 />
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   icon="i-lucide-chevron-left"
                   :disabled="metadata.page <= 1 || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   @click="goPrev"
                 >
                   Prev
@@ -520,10 +540,10 @@ watch(pageSize, () => {
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   trailing-icon="i-lucide-chevron-right"
                   :disabled="metadata.page >= metadata.totalPages || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   @click="goNext"
                 >
                   Next
@@ -531,10 +551,10 @@ watch(pageSize, () => {
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   icon="i-lucide-chevrons-right"
                   :disabled="metadata.page >= metadata.totalPages || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   aria-label="Last page"
                   @click="goLastPage"
                 />
@@ -549,12 +569,7 @@ watch(pageSize, () => {
     <UModal
       v-model:open="confirmOpen"
       :title="confirmTitle"
-      :ui="{
-        content: 'max-w-[92vw] sm:max-w-md',
-        header: 'border-b border-gray-200/80 px-5 py-4 dark:border-gray-800',
-        body: 'px-5 py-5 sm:px-6 sm:py-6',
-        footer: 'border-t border-gray-100 px-5 py-4 dark:border-gray-800'
-      }"
+      :ui="adminModalUiCompact"
     >
       <template #body>
         <div class="space-y-5">
@@ -601,15 +616,22 @@ watch(pageSize, () => {
         </div>
       </template>
       <template #footer="{ close }">
-        <div class="flex w-full flex-wrap justify-end gap-3">
-          <AppButton variant="outline" size="md" class="rounded-xl" :disabled="!!actionLoading" @click="close()">
+        <div class="admin-btn-modal-footer">
+          <AppButton
+            variant="outline"
+            color="neutral"
+            size="sm"
+            class="lb-modal-btn-cancel"
+            :disabled="!!actionLoading"
+            @click="close()"
+          >
             Cancel
           </AppButton>
           <AppButton
             v-if="confirmKind === 'approve'"
             color="success"
-            size="md"
-            class="rounded-xl shadow-lg shadow-emerald-600/25"
+            size="sm"
+            class="lb-modal-btn-submit"
             :loading="!!actionLoading"
             :disabled="!pendingProfile"
             @click="runConfirmedAction"
@@ -619,8 +641,8 @@ watch(pageSize, () => {
           <AppButton
             v-else
             color="error"
-            size="md"
-            class="rounded-xl shadow-lg shadow-rose-600/25"
+            size="sm"
+            class="lb-modal-btn-submit"
             :loading="!!actionLoading"
             :disabled="!pendingProfile"
             @click="runConfirmedAction"

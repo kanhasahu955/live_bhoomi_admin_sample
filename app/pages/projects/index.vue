@@ -9,6 +9,7 @@ import AppButton from '~/components/ui/AppButton.vue'
 import { useProjectsService, useAdminService } from '~/services/api'
 import { get } from '~/utils/lodash'
 import { extractProjects, extractPaginationMeta, type PaginationMeta } from '~/utils/api-extract'
+import { adminModalUiCompact } from '~/utils/admin-modal-ui'
 import { useLocationDetection } from '~/composables/useLocationDetection'
 
 definePageMeta({
@@ -229,7 +230,7 @@ const columns = computed(() => {
         const id = get(row.original, 'id') as string
         const status = get(row.original, 'approvalStatus') as string
         const isLoading = actionLoading.value === id
-        return h('div', { class: 'flex flex-nowrap items-center justify-end gap-2' }, [
+        return h('div', { class: 'flex flex-nowrap items-center justify-end gap-1' }, [
           h(UButton, {
             size: 'sm',
             variant: 'soft',
@@ -237,8 +238,7 @@ const columns = computed(() => {
             icon: 'i-lucide-external-link',
             label: 'View',
             to: `/projects/${id}`,
-            class:
-              'min-h-9 rounded-lg px-3 font-semibold ring-1 ring-emerald-500/25 hover:bg-emerald-500/10 dark:ring-emerald-400/30'
+            class: 'admin-btn-table lb-action-btn'
           }),
           status !== 'PUBLISHED' &&
             h(UButton, {
@@ -248,7 +248,7 @@ const columns = computed(() => {
               icon: 'i-lucide-check',
               label: 'Publish',
               loading: isLoading,
-              class: 'min-h-9 rounded-lg',
+              class: 'admin-btn-table lb-action-btn',
               onClick: () => publishProject(id)
             }),
           status !== 'REJECTED' &&
@@ -259,8 +259,8 @@ const columns = computed(() => {
               icon: 'i-lucide-x',
               label: 'Reject',
               loading: isLoading,
-              class: 'min-h-9 rounded-lg',
-              onClick: () => rejectProject(id)
+              class: 'admin-btn-table lb-action-btn',
+              onClick: () => openRejectModal(id)
             })
         ].filter(Boolean))
       }
@@ -299,7 +299,7 @@ const searchParams = computed(() => {
 async function loadProjects() {
   loading.value = true
   try {
-    const res = (await projectsService.searchPublic(searchParams.value)) as unknown
+    const res = (await adminService.listAdminProjects(searchParams.value)) as unknown
     projects.value = extractProjects(res)
 
     const meta = extractPaginationMeta(res as object, page.value, pageSize.value)
@@ -434,12 +434,33 @@ async function publishProject(id: string) {
   }
 }
 
-async function rejectProject(id: string) {
+const rejectModalOpen = ref(false)
+const pendingRejectId = ref<string | null>(null)
+const rejectReasonInput = ref('')
+
+function openRejectModal(id: string) {
+  pendingRejectId.value = id
+  rejectReasonInput.value = ''
+  rejectModalOpen.value = true
+}
+
+async function confirmRejectProject() {
+  const id = pendingRejectId.value
+  if (!id) return
   actionLoading.value = id
   try {
-    await adminService.rejectProject(id)
+    const reason = rejectReasonInput.value.trim()
+    await adminService.rejectProject(id, reason ? { reason } : undefined)
+    rejectModalOpen.value = false
+    pendingRejectId.value = null
+    rejectReasonInput.value = ''
     await loadProjects()
-    toast.add({ title: 'Rejected', description: 'Project was rejected.', color: 'neutral', icon: 'i-lucide-ban' })
+    toast.add({
+      title: 'Rejected',
+      description: reason ? 'Reason recorded.' : 'Project was rejected.',
+      color: 'warning',
+      icon: 'i-lucide-ban'
+    })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Reject failed'
     toast.add({ title: 'Reject failed', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
@@ -501,21 +522,21 @@ watch(pageSize, () => {
         >
           <div class="min-w-0 max-w-2xl space-y-1">
             <p class="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-              Browse projects, filter by location and attributes, export the current page, or publish or reject when moderation is required.
+              Search, filter, export, and moderate projects. Apply filters after you change them; Reset clears everything.
             </p>
             <p
               v-if="metadata && activeFilterCount > 0"
               class="text-xs text-emerald-700 dark:text-emerald-400"
             >
-              {{ activeFilterCount }} filter(s) active · table also refines the current page if the API omits some params.
+              {{ activeFilterCount }} filter(s) active
             </p>
           </div>
-          <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end">
+          <div class="flex w-full flex-col gap-1.5 sm:w-auto sm:flex-row sm:justify-end">
             <AppButton
               icon="i-lucide-plus"
               size="sm"
               color="success"
-              class="projects-toolbar-btn w-full justify-center rounded-xl shadow-md shadow-emerald-600/20 sm:w-auto"
+              class="admin-btn-page admin-btn-page-fluid"
               @click="onAddProject"
             >
               Add Project
@@ -524,7 +545,8 @@ watch(pageSize, () => {
               icon="i-lucide-download"
               size="sm"
               variant="outline"
-              class="projects-toolbar-btn w-full shrink-0 justify-center rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
+              color="neutral"
+              class="admin-btn-page admin-btn-page-fluid"
               :disabled="loading || !displayProjects.length"
               @click="exportCsv"
             >
@@ -534,7 +556,8 @@ watch(pageSize, () => {
               icon="i-lucide-refresh-cw"
               size="sm"
               variant="outline"
-              class="projects-toolbar-btn w-full shrink-0 justify-center rounded-xl border-gray-300 bg-white shadow-sm dark:border-gray-600 dark:bg-gray-900/80 sm:w-auto"
+              color="neutral"
+              class="admin-btn-page admin-btn-page-fluid"
               :loading="loading"
               @click="refresh"
             >
@@ -546,21 +569,24 @@ watch(pageSize, () => {
         <div
           class="shrink-0 border-b border-emerald-500/10 bg-gradient-to-br from-emerald-50/90 via-white to-gray-50/80 px-5 py-5 dark:border-emerald-500/10 dark:from-emerald-950/40 dark:via-gray-950 dark:to-gray-950 sm:px-6 sm:py-6"
         >
-          <div class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div class="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2">
             <span
               class="inline-flex shrink-0 items-center gap-2 rounded-full bg-emerald-600/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-emerald-800 ring-1 ring-emerald-600/20 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-400/25"
             >
               <UIcon name="i-lucide-sliders-horizontal" class="size-3.5" />
               Filters
             </span>
-            <span class="min-w-0 text-xs text-gray-500 dark:text-gray-500"
-              >Location, GPS, category, type, and status. Use Apply after changes; Reset clears all.</span
-            >
+            <span class="min-w-0 text-xs text-gray-500 dark:text-gray-400">
+              Location, category, type, and approval status — then Apply.
+            </span>
           </div>
 
-          <div class="grid min-w-0 gap-4 lg:grid-cols-12 lg:items-end lg:gap-4">
-            <div class="space-y-1.5 lg:col-span-4">
-              <label class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+          <div
+            class="grid min-w-0 grid-cols-1 gap-x-4 gap-y-4 md:grid-cols-2 md:items-end xl:grid-cols-12"
+          >
+            <div class="space-y-1.5 md:col-span-2 xl:col-span-5">
+              <label
+                class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
                 >Location</label
               >
               <UInputMenu
@@ -569,7 +595,7 @@ watch(pageSize, () => {
                 value-key="value"
                 label-key="label"
                 :loading="suggestionsLoading"
-                placeholder="Filter by city or location"
+                placeholder="City or area"
                 :ignore-filter="true"
                 :trailing-icon="null"
                 create-item
@@ -579,84 +605,92 @@ watch(pageSize, () => {
                 @keydown.enter="applyFilters"
               />
             </div>
-            <div class="space-y-1.5 lg:col-span-2">
-              <label class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            <div class="space-y-1.5 xl:col-span-2">
+              <label
+                class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
                 >Category</label
               >
               <USelect
                 v-model="filters.category"
                 :items="categoryOptions"
                 size="md"
-                class="w-full rounded-xl"
+                class="w-full min-h-10 rounded-xl"
                 :content="{ class: 'z-[9999]' }"
               />
             </div>
-            <div class="space-y-1.5 lg:col-span-2">
-              <label class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            <div class="space-y-1.5 xl:col-span-2">
+              <label
+                class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
                 >Type</label
               >
               <USelect
                 v-model="filters.projectType"
                 :items="projectTypeOptions"
                 size="md"
-                class="w-full rounded-xl"
+                class="w-full min-h-10 rounded-xl"
                 :content="{ class: 'z-[9999]' }"
               />
             </div>
-            <div class="space-y-1.5 lg:col-span-2">
-              <label class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            <div class="space-y-1.5 xl:col-span-3">
+              <label
+                class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
                 >Status</label
               >
               <USelect
                 v-model="filters.approvalStatus"
                 :items="statusOptions"
                 size="md"
-                class="w-full rounded-xl"
+                class="w-full min-h-10 rounded-xl"
                 :content="{ class: 'z-[9999]' }"
               />
             </div>
-            <div class="flex flex-wrap gap-2 lg:col-span-4 lg:justify-end">
-              <AppButton
-                v-if="isSupported"
-                variant="outline"
-                size="md"
-                color="success"
-                :loading="isDetecting"
-                class="projects-toolbar-btn flex-1 rounded-xl border-emerald-200 bg-white/90 dark:border-emerald-800 dark:bg-gray-900/50 lg:flex-none"
-                @click="detectAndFilter"
-              >
-                <UIcon name="i-lucide-navigation" class="size-3.5 shrink-0" />
-                <span>{{ isDetecting ? 'Detecting...' : 'Use my location' }}</span>
-              </AppButton>
-              <AppButton
-                v-if="filters.location || hasDetected"
-                variant="outline"
-                size="md"
-                icon="i-lucide-x"
-                class="projects-toolbar-btn flex-1 rounded-xl border-gray-300 bg-white/90 dark:border-gray-600 dark:bg-gray-900/50 lg:flex-none"
-                @click="clearLocationFilter"
-              >
-                Clear
-              </AppButton>
-              <AppButton
-                color="success"
-                size="md"
-                icon="i-lucide-filter"
-                class="projects-toolbar-btn flex-1 rounded-xl shadow-md shadow-emerald-600/20 lg:flex-none"
-                @click="applyFilters"
-              >
-                Apply
-              </AppButton>
-            </div>
+          </div>
+
+          <div
+            class="mt-5 flex flex-col gap-1.5 border-t border-gray-200/70 pt-5 dark:border-gray-700/70 sm:flex-row sm:flex-wrap sm:items-stretch sm:justify-end sm:gap-1.5"
+          >
+            <AppButton
+              v-if="isSupported"
+              variant="outline"
+              size="sm"
+              color="neutral"
+              :loading="isDetecting"
+              class="admin-btn-page admin-btn-page-fluid sm:min-w-[10.5rem]"
+              @click="detectAndFilter"
+            >
+              <UIcon name="i-lucide-navigation" class="size-3.5 shrink-0" />
+              <span>{{ isDetecting ? 'Detecting...' : 'Use my location' }}</span>
+            </AppButton>
+            <AppButton
+              v-if="filters.location || hasDetected"
+              variant="outline"
+              size="sm"
+              color="neutral"
+              icon="i-lucide-x"
+              class="admin-btn-page admin-btn-page-fluid sm:min-w-[7rem]"
+              @click="clearLocationFilter"
+            >
+              Clear location
+            </AppButton>
+            <AppButton
+              color="success"
+              size="sm"
+              icon="i-lucide-filter"
+              class="admin-btn-page admin-btn-page-fluid sm:min-w-[8.5rem]"
+              @click="applyFilters"
+            >
+              Apply filters
+            </AppButton>
           </div>
 
           <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <AppButton
               v-if="activeFilterCount > 0"
               variant="ghost"
+              color="neutral"
               size="sm"
               icon="i-lucide-rotate-ccw"
-              class="self-start text-gray-600 hover:text-emerald-800 dark:text-gray-400 dark:hover:text-emerald-300"
+              class="self-start rounded-lg font-medium text-gray-600 hover:bg-gray-100 hover:text-emerald-800 dark:text-gray-400 dark:hover:bg-gray-800/80 dark:hover:text-emerald-300"
               @click="resetFilters"
             >
               Reset all filters
@@ -683,7 +717,7 @@ watch(pageSize, () => {
               :data="displayProjects"
               :columns="columns"
               :loading="loading"
-              class="min-w-0"
+              class="projects-table min-w-0"
               empty="No projects match your filters."
             />
           </div>
@@ -722,25 +756,25 @@ watch(pageSize, () => {
                 />
               </div>
               <div
-                class="flex items-center gap-1.5 rounded-xl bg-white/90 p-1 ring-1 ring-gray-200/90 dark:bg-gray-900/90 dark:ring-gray-700"
+                class="flex items-center gap-1 rounded-xl bg-white/90 p-0.5 ring-1 ring-gray-200/90 dark:bg-gray-900/90 dark:ring-gray-700"
               >
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   icon="i-lucide-chevrons-left"
                   :disabled="metadata.page <= 1 || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   aria-label="First page"
                   @click="goFirstPage"
                 />
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   icon="i-lucide-chevron-left"
                   :disabled="metadata.page <= 1 || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   @click="goPrev"
                 >
                   Prev
@@ -748,10 +782,10 @@ watch(pageSize, () => {
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   trailing-icon="i-lucide-chevron-right"
                   :disabled="metadata.page >= metadata.totalPages || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   @click="goNext"
                 >
                   Next
@@ -759,10 +793,10 @@ watch(pageSize, () => {
                 <UButton
                   size="sm"
                   variant="soft"
-                  color="primary"
+                  color="neutral"
                   icon="i-lucide-chevrons-right"
                   :disabled="metadata.page >= metadata.totalPages || loading || metadata.total === 0"
-                  class="rounded-lg"
+                  class="admin-btn-pagination lb-action-btn"
                   aria-label="Last page"
                   @click="goLastPage"
                 />
@@ -772,6 +806,53 @@ watch(pageSize, () => {
         </div>
       </div>
     </div>
+
+    <UModal
+      v-model:open="rejectModalOpen"
+      title="Reject project"
+      :ui="adminModalUiCompact"
+    >
+      <template #body>
+        <div class="space-y-4">
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            The lister may see an optional reason you add below.
+          </p>
+          <div class="space-y-2">
+            <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Reason (optional)</label>
+            <textarea
+              v-model="rejectReasonInput"
+              rows="3"
+              placeholder="e.g. Incomplete documentation"
+              class="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-inner placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
+            />
+          </div>
+        </div>
+      </template>
+      <template #footer="{ close }">
+        <div class="admin-btn-modal-footer">
+          <AppButton
+            variant="outline"
+            color="neutral"
+            size="sm"
+            class="lb-modal-btn-cancel"
+            :disabled="!!actionLoading"
+            @click="close()"
+          >
+            Cancel
+          </AppButton>
+          <AppButton
+            color="error"
+            size="sm"
+            class="lb-modal-btn-submit"
+            :loading="!!actionLoading"
+            :disabled="!pendingRejectId"
+            @click="confirmRejectProject"
+          >
+            Confirm rejection
+          </AppButton>
+        </div>
+      </template>
+    </UModal>
   </AppStack>
 </template>
 
@@ -805,8 +886,14 @@ watch(pageSize, () => {
 .projects-table-wrap :deep(tbody tr:last-child) {
   @apply border-b-0;
 }
-
-.projects-toolbar-btn :deep([data-slot="base"]) {
-  @apply inline-flex min-h-10 w-full items-center justify-center gap-2 px-4 py-2.5 sm:w-auto;
+.projects-table-wrap :deep(tbody td:last-child) {
+  overflow: visible;
+  min-width: 11rem;
 }
+@media (min-width: 1024px) {
+  .projects-table-wrap :deep(tbody td:last-child) {
+    min-width: 13rem;
+  }
+}
+
 </style>
