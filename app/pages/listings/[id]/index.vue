@@ -4,7 +4,13 @@ import { useClipboard } from '@vueuse/core'
 import { useListingsService, useAdminService } from '~/services/api'
 import { get } from '~/utils/lodash'
 import { extractListings } from '~/utils/api-extract'
-import { adminModalUiCompact, adminModalUiWide } from '~/utils/admin-modal-ui'
+import { adminModalUiCompact } from '~/utils/admin-modal-ui'
+import {
+  canAdminFullEditListing,
+  canAdminRejectListing,
+  isListingPublished,
+  isListingSoftDeleted
+} from '~/utils/listing-admin'
 
 definePageMeta({
   layout: 'admin',
@@ -19,45 +25,42 @@ const { copy } = useClipboard()
 const listingsService = useListingsService()
 const adminService = useAdminService()
 
-const listingId = computed(() => route.params.id as string)
+const listingId = computed(() => {
+  const raw = route.params.id
+  const s = Array.isArray(raw) ? raw[0] : raw
+  return s != null && String(s) !== '' ? String(s) : ''
+})
+
+function goToListingEdit() {
+  const id = listingId.value
+  if (!id) {
+    toast.add({
+      title: 'Cannot open editor',
+      description: 'Listing id is missing.',
+      color: 'warning',
+      icon: 'i-lucide-alert-circle'
+    })
+    return
+  }
+  if (listing.value && !canAdminFullEditListing(listing.value)) {
+    toast.add({
+      title: 'Editing locked',
+      description: 'This listing was removed.',
+      color: 'warning',
+      icon: 'i-lucide-lock'
+    })
+    return
+  }
+  void router.push(`/listings/${id}/edit`)
+}
+
 const listing = ref<Record<string, unknown> | null>(null)
 const loading = ref(false)
 const saving = ref(false)
 const error = ref<string | null>(null)
 
-const editModalOpen = ref(false)
-const editSaving = ref(false)
 const rejectModalOpen = ref(false)
 const rejectReasonInput = ref('')
-const editForm = ref({
-  title: '',
-  description: '',
-  category: '',
-  type: '',
-  purpose: '',
-  negotiable: false,
-  isFeatured: false
-})
-
-const categoryEditOptions = [
-  { label: 'Residential', value: 'RESIDENTIAL' },
-  { label: 'Commercial', value: 'COMMERCIAL' },
-  { label: 'Industrial', value: 'INDUSTRIAL' },
-  { label: 'Land', value: 'LAND' }
-]
-
-const typeEditOptions = [
-  { label: 'Apartment', value: 'APARTMENT' },
-  { label: 'Villa', value: 'VILLA' },
-  { label: 'House', value: 'HOUSE' },
-  { label: 'Plot', value: 'PLOT' },
-  { label: 'Studio', value: 'STUDIO' }
-]
-
-const purposeEditOptions = [
-  { label: 'Sale', value: 'SALE' },
-  { label: 'Rent', value: 'RENT' }
-]
 
 function extractListing(res: unknown): Record<string, unknown> | null {
   const obj = res as Record<string, unknown>
@@ -82,8 +85,13 @@ async function loadListing() {
   loading.value = true
   error.value = null
   try {
-    const res = await listingsService.getById(listingId.value)
-    listing.value = extractListing(res)
+    try {
+      const res = await adminService.getListingById(listingId.value)
+      listing.value = extractListing(res)
+    } catch {
+      const res = await listingsService.getById(listingId.value)
+      listing.value = extractListing(res)
+    }
     if (!listing.value?.id) {
       listing.value = await findListingInAdminList(listingId.value)
     }
@@ -110,55 +118,17 @@ function copyPageLink() {
   toast.add({ title: 'Link copied', description: 'Page link is on your clipboard.', color: 'success', icon: 'i-lucide-link' })
 }
 
-function openEditModal() {
-  const l = listing.value
-  if (!l) return
-  editForm.value = {
-    title: String(get(l, 'title') ?? get(l, 'project.name') ?? ''),
-    description: String(get(l, 'description') ?? ''),
-    category: String(get(l, 'category') ?? ''),
-    type: String(get(l, 'type') ?? get(l, 'subType') ?? ''),
-    purpose: String(get(l, 'purpose') ?? ''),
-    negotiable: Boolean(get(l, 'negotiable')),
-    isFeatured: Boolean(get(l, 'isFeatured'))
-  }
-  editModalOpen.value = true
-}
-
-async function saveListingEdits() {
-  if (!listingId.value || !listing.value) return
-  editSaving.value = true
-  error.value = null
-  try {
-    const body: Record<string, unknown> = {
-      title: editForm.value.title.trim(),
-      description: editForm.value.description.trim() || undefined,
-      category: editForm.value.category || undefined,
-      type: editForm.value.type || undefined,
-      purpose: editForm.value.purpose || undefined,
-      negotiable: editForm.value.negotiable,
-      isFeatured: editForm.value.isFeatured
-    }
-    const res = await adminService.updateListing(listingId.value, body)
-    const updated = extractListing(res)
-    if (updated && get(updated, 'id')) {
-      listing.value = { ...listing.value, ...updated }
-    } else {
-      await loadListing()
-    }
-    editModalOpen.value = false
-    toast.add({ title: 'Saved', description: 'Listing updated successfully.', color: 'success', icon: 'i-lucide-check' })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Update failed'
-    error.value = msg
-    toast.add({ title: 'Update failed', description: msg, color: 'error', icon: 'i-lucide-alert-circle' })
-  } finally {
-    editSaving.value = false
-  }
-}
-
 async function publishListing() {
   if (!listingId.value) return
+  if (listing.value && isListingPublished(listing.value)) {
+    toast.add({
+      title: 'Already published',
+      description: 'This listing is already live.',
+      color: 'neutral',
+      icon: 'i-lucide-info'
+    })
+    return
+  }
   saving.value = true
   error.value = null
   try {
@@ -179,8 +149,22 @@ function openRejectModal() {
   rejectModalOpen.value = true
 }
 
+function setRejectModalOpen(value: boolean) {
+  rejectModalOpen.value = value
+}
+
 async function confirmRejectListing() {
   if (!listingId.value) return
+  if (listing.value && !canAdminRejectListing(listing.value)) {
+    rejectModalOpen.value = false
+    toast.add({
+      title: 'Cannot reject',
+      description: 'Use reject when the listing is in pending review or published (not already rejected).',
+      color: 'warning',
+      icon: 'i-lucide-info'
+    })
+    return
+  }
   saving.value = true
   error.value = null
   const reason = rejectReasonInput.value.trim()
@@ -306,7 +290,15 @@ watch(
               {{ listing ? String(displayName) : loading ? 'Loading…' : 'Listing' }}
             </h1>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Edit fields or publish when this listing is ready to go live.
+              <template v-if="listing && isListingSoftDeleted(listing)">
+                Admin view of a soft-deleted listing (included in GET /admin/listings/:id).
+              </template>
+              <template v-else-if="listing && isListingPublished(listing)">
+                Published — use Update to edit, Reject to send back to draft, or Publish is already applied.
+              </template>
+              <template v-else>
+                Edit fields on the update page, then publish when this listing is ready to go live.
+              </template>
             </p>
           </div>
         </div>
@@ -321,28 +313,31 @@ watch(
             </p>
             <div class="lb-detail-toolbar">
               <AppButton
+                v-if="canAdminFullEditListing(listing)"
+                type="button"
                 color="primary"
                 size="sm"
                 class="lb-detail-action-btn lb-detail-action-btn--primary"
-                @click="openEditModal"
+                @click="goToListingEdit"
               >
                 <UIcon name="i-lucide-pencil" class="size-4 shrink-0" />
-                Edit listing
+                Update listing
               </AppButton>
               <AppButton
-                v-if="get(listing, 'approvalStatus') !== 'PUBLISHED' && get(listing, 'status') !== 'PUBLISHED'"
+                v-if="!isListingSoftDeleted(listing)"
                 variant="outline"
                 color="primary"
                 size="sm"
+                :disabled="isListingPublished(listing)"
                 :loading="saving"
                 class="lb-detail-action-btn"
                 @click="publishListing"
               >
                 <UIcon name="i-lucide-check" class="size-4 shrink-0" />
-                Publish
+                {{ isListingPublished(listing) ? 'Published' : 'Publish' }}
               </AppButton>
               <AppButton
-                v-if="get(listing, 'approvalStatus') !== 'REJECTED' && get(listing, 'status') !== 'REJECTED'"
+                v-if="canAdminRejectListing(listing)"
                 variant="outline"
                 color="error"
                 size="sm"
@@ -802,124 +797,17 @@ watch(
       </template>
 
     <UModal
-      v-model:open="editModalOpen"
-      :ui="adminModalUiWide"
-      description="Update the fields below, then save. Changes apply as soon as the save succeeds."
+      :open="rejectModalOpen"
+      title="Reject listing"
+      :ui="adminModalUiCompact"
+      @update:open="setRejectModalOpen"
     >
-      <template #title>
-        <span class="flex items-center gap-3">
-          <span
-            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20"
-          >
-            <UIcon name="i-lucide-pencil" class="size-[18px]" />
-          </span>
-          <span>Edit listing</span>
-        </span>
-      </template>
-      <template #body>
-        <div
-          class="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-[0_1px_0_rgba(0,0,0,0.04),0_12px_32px_-8px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.03] dark:border-gray-700/90 dark:bg-gray-900 dark:shadow-none dark:ring-white/[0.06] sm:p-6"
-        >
-          <div class="space-y-6">
-            <div class="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,6.5rem)_1fr] sm:items-center sm:gap-x-6">
-              <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Title</label>
-              <input
-                v-model="editForm.title"
-                type="text"
-                autocomplete="off"
-                class="w-full min-h-10 rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 transition-colors placeholder:text-gray-400 focus:border-[#66de80] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#66de80]/25 dark:border-gray-600 dark:bg-gray-950/80 dark:text-white dark:focus:border-[#66de80] dark:focus:bg-gray-900"
-              >
-            </div>
-            <div class="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,6.5rem)_1fr] sm:items-start sm:gap-x-6">
-              <label class="pt-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:pt-2.5">Description</label>
-              <textarea
-                v-model="editForm.description"
-                rows="4"
-                class="w-full resize-y rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-3 text-sm leading-relaxed text-gray-900 transition-colors focus:border-[#66de80] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#66de80]/25 dark:border-gray-600 dark:bg-gray-950/80 dark:text-white dark:focus:bg-gray-900"
-              />
-            </div>
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-x-4">
-              <div class="flex flex-col gap-1.5">
-                <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Category</label>
-                <select
-                  v-model="editForm.category"
-                  class="w-full min-h-10 cursor-pointer rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 transition-colors focus:border-[#66de80] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#66de80]/25 dark:border-gray-600 dark:bg-gray-950/80 dark:text-white dark:focus:bg-gray-900"
-                >
-                  <option value="">Select</option>
-                  <option v-for="opt in categoryEditOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
-              </div>
-              <div class="flex flex-col gap-1.5">
-                <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Type</label>
-                <select
-                  v-model="editForm.type"
-                  class="w-full min-h-10 cursor-pointer rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 transition-colors focus:border-[#66de80] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#66de80]/25 dark:border-gray-600 dark:bg-gray-950/80 dark:text-white dark:focus:bg-gray-900"
-                >
-                  <option value="">Select</option>
-                  <option v-for="opt in typeEditOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
-              </div>
-              <div class="flex flex-col gap-1.5">
-                <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Purpose</label>
-                <select
-                  v-model="editForm.purpose"
-                  class="w-full min-h-10 cursor-pointer rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 py-2.5 text-sm text-gray-900 transition-colors focus:border-[#66de80] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#66de80]/25 dark:border-gray-600 dark:bg-gray-950/80 dark:text-white dark:focus:bg-gray-900"
-                >
-                  <option value="">Select</option>
-                  <option v-for="opt in purposeEditOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
-              </div>
-            </div>
-            <div
-              class="rounded-xl border border-[#66de80]/20 bg-gradient-to-br from-emerald-50/80 to-white px-4 py-4 dark:border-emerald-500/20 dark:from-emerald-950/25 dark:to-gray-900/80"
-            >
-              <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-emerald-800/90 dark:text-emerald-300/90">Options</p>
-              <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-8">
-                <label class="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-gray-800 dark:text-gray-200">
-                  <input v-model="editForm.negotiable" type="checkbox" class="size-4 rounded border-gray-300 text-[#66de80] focus:ring-[#66de80]">
-                  Price negotiable
-                </label>
-                <label class="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-gray-800 dark:text-gray-200">
-                  <input v-model="editForm.isFeatured" type="checkbox" class="size-4 rounded border-gray-300 text-[#66de80] focus:ring-[#66de80]">
-                  Featured listing
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-      </template>
-      <template #footer="{ close }">
-        <div class="admin-btn-modal-footer">
-          <AppButton
-            variant="outline"
-            color="neutral"
-            size="sm"
-            class="lb-modal-btn-cancel"
-            :disabled="editSaving"
-            @click="close()"
-          >
-            Cancel
-          </AppButton>
-          <AppButton
-            color="primary"
-            size="sm"
-            icon="i-lucide-check"
-            class="lb-modal-btn-submit-wide"
-            :loading="editSaving"
-            :disabled="!editForm.title.trim()"
-            @click="saveListingEdits"
-          >
-            Save changes
-          </AppButton>
-        </div>
-      </template>
-    </UModal>
-
-    <UModal v-model:open="rejectModalOpen" title="Reject listing" :ui="adminModalUiCompact">
       <template #body>
         <div class="space-y-4">
           <p class="text-sm text-gray-600 dark:text-gray-400">
-            The lister may see an optional reason you add below.
+            For <span class="font-mono text-xs">PENDING_REVIEW</span> or published listings. Calls
+            <span class="font-mono text-xs">PATCH …/reject</span> — approval becomes
+            <span class="font-mono text-xs">REJECTED</span> and the owner can revise. Optional reason for the lister.
           </p>
           <div class="space-y-2">
             <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Reason (optional)</label>

@@ -6,6 +6,12 @@ import UIcon from '@nuxt/ui/components/Icon.vue'
 import { NuxtLink } from '#components'
 import AppButton from '~/components/ui/AppButton.vue'
 import { useAdminService } from '~/services/api'
+import {
+  canAdminFullEditListing,
+  canAdminRejectListing,
+  isListingPublished,
+  isListingSoftDeleted
+} from '~/utils/listing-admin'
 import { get } from '~/utils/lodash'
 import { extractListings, extractPaginationMeta, type PaginationMeta } from '~/utils/api-extract'
 import { adminModalUiCompact } from '~/utils/admin-modal-ui'
@@ -68,6 +74,7 @@ const purposeOptions = [
 const statusOptions = [
   { label: 'All statuses', value: ALL },
   { label: 'Published', value: 'PUBLISHED' },
+  { label: 'Pending review', value: 'PENDING_REVIEW' },
   { label: 'Pending', value: 'PENDING' },
   { label: 'Rejected', value: 'REJECTED' },
   { label: 'Draft', value: 'DRAFT' }
@@ -195,8 +202,9 @@ const columns = computed(() => {
       },
       cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
         const id = get(row.original, 'id') as string
-        const status = get(row.original, 'approvalStatus') ?? get(row.original, 'status') as string
         const isLoading = actionLoading.value === id
+        const canEdit = canAdminFullEditListing(row.original)
+        const canReject = canAdminRejectListing(row.original)
         return h('div', { class: 'flex flex-nowrap items-center justify-end gap-1' }, [
           h(UButton, {
             size: 'sm',
@@ -207,18 +215,29 @@ const columns = computed(() => {
             to: `/listings/${id}`,
             class: 'admin-btn-table lb-action-btn'
           }),
-          status !== 'PUBLISHED' &&
+          canEdit &&
+            h(UButton, {
+              size: 'sm',
+              variant: 'soft',
+              color: 'neutral',
+              icon: 'i-lucide-pencil',
+              label: 'Edit',
+              to: `/listings/${id}/edit`,
+              class: 'admin-btn-table lb-action-btn'
+            }),
+          !isListingSoftDeleted(row.original) &&
             h(UButton, {
               size: 'sm',
               variant: 'soft',
               color: 'success',
               icon: 'i-lucide-check',
-              label: 'Publish',
+              label: isListingPublished(row.original) ? 'Published' : 'Publish',
+              disabled: isListingPublished(row.original),
               loading: isLoading,
               class: 'admin-btn-table lb-action-btn',
               onClick: () => publishListing(id)
             }),
-          status !== 'REJECTED' &&
+          canReject &&
             h(UButton, {
               size: 'sm',
               variant: 'soft',
@@ -306,6 +325,16 @@ async function loadListings() {
 }
 
 async function publishListing(id: string) {
+  const row = listings.value.find((r) => String(get(r, 'id')) === id)
+  if (row && isListingPublished(row)) {
+    toast.add({
+      title: 'Already published',
+      description: 'This listing is already live.',
+      color: 'neutral',
+      icon: 'i-lucide-info'
+    })
+    return
+  }
   actionLoading.value = id
   try {
     await adminService.publishListing(id)
@@ -702,7 +731,8 @@ watch(pageSize, () => {
       <template #body>
         <div class="space-y-4">
           <p class="text-sm text-gray-600 dark:text-gray-400">
-            The lister may see an optional reason you add below.
+            For <span class="font-mono text-xs">PENDING_REVIEW</span> or published rows. Uses
+            <span class="font-mono text-xs">PATCH …/reject</span>. Optional reason for the lister.
           </p>
           <div class="space-y-2">
             <label class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Reason (optional)</label>

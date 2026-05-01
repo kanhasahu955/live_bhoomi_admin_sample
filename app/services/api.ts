@@ -168,12 +168,20 @@ export class AdminService extends BaseService {
   listAdminListings(params?: Record<string, string | number>) {
     return this.api.get(ADMIN.listings, params)
   }
+  /** GET /admin/listings/:id — full row, includes soft-deleted; staff+ */
+  getListingById(listingId: string) {
+    return this.api.get<ApiResponse<unknown>>(ADMIN.listingAdmin(listingId))
+  }
   updateListing(listingId: string, body: Record<string, unknown>) {
     return this.api.patch<ApiResponse<unknown>>(ADMIN.listingAdmin(listingId), body)
   }
-  publishListing(listingId: string) { return this.api.patch(ADMIN.listingPublish(listingId)) }
+  /** PATCH /admin/listings/:id/publish — staff+ */
+  publishListing(listingId: string) {
+    return this.api.patch<ApiResponse<unknown>>(ADMIN.listingPublish(listingId))
+  }
+  /** PATCH /admin/listings/:id/reject — only when approvalStatus is PENDING_REVIEW; staff+ */
   rejectListing(listingId: string, body?: { reason?: string }) {
-    return this.api.patch(ADMIN.listingReject(listingId), body)
+    return this.api.patch<ApiResponse<unknown>>(ADMIN.listingReject(listingId), body)
   }
 }
 
